@@ -1,5 +1,7 @@
 # Permanent localhost login session: TDD evidence
 
+> Historical record: this behavior was superseded by conditional session expiry. Manual-login sessions now use a TTL, while only environment-backed auto-login sessions remain non-expiring.
+
 ## Source and user journey
 
 - Source: the user request in this task; no external plan document was used.

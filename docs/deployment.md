@@ -157,5 +157,6 @@ npm run build
 - 闲鱼页面和接口可能随平台更新变化，升级后应重新验证登录、消息、商品和订单链路。
 - 仍兼容旧版无盐 SHA-256 密码哈希，不建议未经额外防护直接暴露到公网。
 - 验证码邮件只经由你自己配置的 SMTP 发送，发不出去直接报错，不会转交第三方接口代发。
-- `ADMIN_LOGIN_ENABLED=false` 时浏览器会直接建立管理员会话；任何能访问管理端口的人都拥有管理员权限，只可用于可信网络。设为 `true` 后恢复手动登录，Docker 重启会使现有会话失效。
+- 默认 `ADMIN_LOGIN_ENABLED=true`：显示登录页，登录会话按 `SESSION_TIMEOUT_SECONDS` 过期（默认 86400 秒），Docker 重启也会使现有会话失效。
+- `ADMIN_LOGIN_ENABLED=false`：不显示登录页，浏览器使用 `.env` 中管理员账号自动建立永久会话；任何能访问管理端口的人都拥有管理员权限，只可用于可信网络。
 - `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 是内置管理员凭据的启动配置；提供 `ADMIN_PASSWORD` 时，每次启动都会把持久化数据库同步为这组凭据。

@@ -142,6 +142,7 @@ async def open_manual_session(
     cookies_str: str,
     timeout: int = DEFAULT_TIMEOUT,
     headless: bool = True,
+    owner_user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """打开一个人工验证会话，等待人在浏览器里完成滑块。
 
@@ -228,7 +229,9 @@ async def open_manual_session(
             logger.warning(f"【{cookie_id}】{result['message']}")
             return result
 
-        await captcha_controller.create_session(session_id, page)
+        await captcha_controller.create_session(
+            session_id, page, owner_user_id=owner_user_id
+        )
         # 持续推送截图，让用户能看到自己的拖动效果
         refresh_task = asyncio.create_task(
             captcha_controller.auto_refresh_screenshot(session_id, interval=1.0)

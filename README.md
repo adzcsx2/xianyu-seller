@@ -106,7 +106,7 @@ python Start.py
 
 默认管理员账号为 `admin`，密码为 `admin123`。首次启动后请立即在后台修改密码，或在 `.env` 中设置 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD`。
 
-`ADMIN_LOGIN_ENABLED=false` 会免登录进入管理后台，只适用于可信内网。只要服务可能被其他人访问，就应改为 `true`，并通过防火墙或反向代理限制管理端口。
+默认 `ADMIN_LOGIN_ENABLED=true`，登录会话按 `SESSION_TIMEOUT_SECONDS` 过期（默认 86400 秒）。设为 `false` 时，前端不显示登录页，而是使用 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 对应管理员自动建立永久会话；该模式只适用于可信内网。
 
 ## 使用流程
 

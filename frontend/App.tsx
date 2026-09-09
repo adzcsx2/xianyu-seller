@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('active_page') || 'dashboard');
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [loginRequired, setLoginRequired] = useState<boolean | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -69,15 +70,6 @@ const App: React.FC = () => {
   const [regNotice, setRegNotice] = useState('');
   const [codeSending, setCodeSending] = useState(false);
   const [codeCountdown, setCodeCountdown] = useState(0);
-
-  useEffect(() => {
-    getPublicSettings()
-      .then(s => {
-        setAllowRegister(String(s.registration_enabled) === 'true');
-        setNeedEmailCode(String(s.email_verification_enabled ?? 'true') !== 'false');
-      })
-      .catch(() => setAllowRegister(false));
-  }, []);
 
   // 验证码重发倒计时
   useEffect(() => {
@@ -155,6 +147,19 @@ const App: React.FC = () => {
   // backend has disabled admin login validation; otherwise the login form remains.
   useEffect(() => {
       const establishSession = async () => {
+        let requiresLogin = true;
+        try {
+          const settings = await getPublicSettings();
+          setAllowRegister(String(settings.registration_enabled) === 'true');
+          setNeedEmailCode(
+            String(settings.email_verification_enabled ?? 'true') !== 'false'
+          );
+          requiresLogin = String(settings.admin_login_enabled ?? 'true') !== 'false';
+        } catch {
+          setAllowRegister(false);
+        }
+        setLoginRequired(requiresLogin);
+
         const token = localStorage.getItem('auth_token');
         if (token) {
           try {
@@ -170,8 +175,14 @@ const App: React.FC = () => {
           localStorage.removeItem('auth_token');
         }
 
+        if (requiresLogin) {
+          setIsLoggedIn(false);
+          return;
+        }
+
         const result = await login({});
         if (!result.success || !result.token) {
+          setLoginError(result.message || '免登录会话创建失败');
           setIsLoggedIn(false);
           return;
         }
@@ -230,6 +241,26 @@ const App: React.FC = () => {
               </div>
           </div>
       );
+  }
+
+  if (!isLoggedIn && loginRequired === false) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6">
+        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center">
+          <h1 className="text-lg font-bold text-gray-900">免登录会话创建失败</h1>
+          <p className="mt-2 text-sm text-red-700">
+            {loginError || '请检查 .env 中的 ADMIN_USERNAME 与管理员账号配置。'}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="ios-btn-primary mt-4 rounded-md px-4 py-2 text-sm"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Login Screen Component
@@ -491,10 +522,10 @@ const App: React.FC = () => {
         }}
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
-        onLogout={() => {
+        onLogout={loginRequired ? () => {
             localStorage.removeItem('auth_token');
             window.location.reload();
-        }} 
+        } : undefined}
       />
       
       <main className="min-h-screen min-w-0 flex-1 overflow-y-auto lg:ml-[248px]">

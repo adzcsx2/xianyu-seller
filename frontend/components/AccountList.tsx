@@ -179,7 +179,7 @@ const AccountList: React.FC = () => {
       }
       if (result.verification_url) {
         window.open(result.verification_url, '_blank', 'noopener,noreferrer');
-        notify('已打开验证页，请用鼠标拖动滑块完成验证', 'info');
+        notify('仅当浏览器指纹与服务端 Chromium 151 一致时使用；验证后需手动回填含 x5sec 的完整 Cookie', 'info');
       }
     } catch (error) {
       notify(error instanceof Error ? error.message : '获取验证链接失败', 'error');
@@ -251,6 +251,7 @@ const AccountList: React.FC = () => {
     }
 
     let closed = false;
+    let authFailed = false;
     let retry = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -261,6 +262,18 @@ const AccountList: React.FC = () => {
         `${scheme}://${location.host}/api/captcha/ws/${encodeURIComponent(captchaAccount.id)}`
       );
       captchaWsRef.current = ws;
+
+      ws.onopen = () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          authFailed = true;
+          setCaptchaStage('failed');
+          setCaptchaMessage('登录状态已失效，请刷新页面后重试');
+          ws.close();
+          return;
+        }
+        ws.send(JSON.stringify({ type: 'authenticate', token }));
+      };
 
       ws.onmessage = event => {
         let data: any;
@@ -283,7 +296,14 @@ const AccountList: React.FC = () => {
           setCaptchaStage('done');
           setCaptchaMessage('验证通过，正在回收 Cookie…');
         } else if (data.type === 'error') {
-          // 会话尚未建立时后端会立刻返回 error，稍后重试即可
+          if (String(data.message || '').includes('认证')) {
+            authFailed = true;
+            setCaptchaStage('failed');
+            setCaptchaMessage(data.message || '验证会话认证失败');
+            ws.close();
+            return;
+          }
+          // 会话尚未建立时后端会返回 error，稍后重试即可
           if (retry < CAPTCHA_WS_RETRY_LIMIT) {
             retry += 1;
             timer = setTimeout(connect, 1000);
@@ -292,7 +312,7 @@ const AccountList: React.FC = () => {
       };
 
       ws.onclose = () => {
-        if (!closed && retry < CAPTCHA_WS_RETRY_LIMIT) {
+        if (!closed && !authFailed && retry < CAPTCHA_WS_RETRY_LIMIT) {
           retry += 1;
           timer = setTimeout(connect, 1000);
         }
@@ -680,7 +700,7 @@ const AccountList: React.FC = () => {
             ) : (
               <>
                 {' '}本地冷却已结束，但闲鱼仍要求完成验证。请用下方账号卡片里的
-                「在我的浏览器打开验证页」用真实鼠标过一次滑块，通过后会自动恢复。
+                「人工验证」可由系统自动回收 Cookie；若在你自己的浏览器打开，则需手动回填 Cookie。
               </>
             )}
           </p>
@@ -791,8 +811,9 @@ const AccountList: React.FC = () => {
                   <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                     <p className="font-bold">闲鱼要求完成人机验证，账号暂时拿不到令牌</p>
                     <p className="mt-1">
-                      推荐用你自己的浏览器打开验证页、用真实鼠标拖动滑块，通过率远高于服务器自动拖动。
-                      验证通过后本页会自动恢复，无需重新扫码。
+                      可在你自己的浏览器用真实鼠标完成滑块，但浏览器 Cookie 不会自动同步回服务器；
+                      通过后需手动回填 Cookie（必须包含新的 x5sec），且 Edge/其他版本指纹不同仍可能被拒。
+                      推荐优先使用账号卡片右侧的「人工验证」。
                     </p>
                     <button
                       type="button"
@@ -803,7 +824,7 @@ const AccountList: React.FC = () => {
                       {freshUrlLoadingId === account.id
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         : <ShieldCheck className="h-3.5 w-3.5" />}
-                      在我的浏览器打开验证页
+                      在我的浏览器打开（需手动回填 Cookie）
                     </button>
                   </div>
                 )}

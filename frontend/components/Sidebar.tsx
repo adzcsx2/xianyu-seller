@@ -22,7 +22,7 @@ import ThemeToggle from './ThemeToggle';
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onLogout: () => void;
+  onLogout?: () => void;
   mobileOpen: boolean;
   onMobileClose: () => void;
 }
@@ -140,14 +140,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
 
       <div className="shrink-0 p-3" style={{ borderTop: '1px solid var(--border)' }}>
         <ThemeToggle className="mb-2" />
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[var(--text-muted)] transition-colors hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
-        >
-          <LogOut className="h-[18px] w-[18px]" />
-          <span className="text-sm font-medium">退出登录</span>
-        </button>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[var(--text-muted)] transition-colors hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+          >
+            <LogOut className="h-[18px] w-[18px]" />
+            <span className="text-sm font-medium">退出登录</span>
+          </button>
+        )}
       </div>
     </aside>
     </>

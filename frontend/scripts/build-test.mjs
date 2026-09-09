@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 const frontendDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const projectRoot = path.resolve(frontendDir, '..');
-const defaultArtifactDir = path.resolve(projectRoot, '.tmp', 'test-artifacts', 'frontend-static');
+const defaultArtifactDir = path.resolve(projectRoot, 'logs', 'test-artifacts', 'frontend-static');
 const outputDir = path.resolve(process.env.TEST_ARTIFACT_DIR || defaultArtifactDir);
-const safeRoot = path.resolve(projectRoot, '.tmp', 'test-artifacts');
+const safeRoot = path.resolve(projectRoot, 'logs', 'test-artifacts');
 const relativeOutput = path.relative(safeRoot, outputDir);
 
 if (!relativeOutput || relativeOutput.startsWith('..') || path.isAbsolute(relativeOutput)) {

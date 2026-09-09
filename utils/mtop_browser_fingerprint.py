@@ -8,11 +8,10 @@ from app.config import DEFAULT_HEADERS
 _FALLBACK_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0"
+    "Chrome/151.0.0.0 Safari/537.36"
 )
 _FALLBACK_SEC_CH_UA = (
-    '"Not=A?Brand";v="99", "Microsoft Edge";v="151", '
-    '"Chromium";v="151"'
+    '"Chromium";v="151", "Not=A?Brand";v="99"'
 )
 
 
@@ -55,9 +54,5 @@ def build_mtop_request_headers(cookies_str: str) -> Dict[str, str]:
 
 
 def get_playwright_context_options() -> Dict[str, object]:
-    """把同一套 UA / Client Hints 转成 Playwright context 参数。"""
-    fingerprint = get_browser_fingerprint_headers()
-    return {
-        "user_agent": fingerprint.pop("user-agent"),
-        "extra_http_headers": fingerprint,
-    }
+    """设置 Chromium UA，并让浏览器自行生成一致的 Client Hints。"""
+    return {"user_agent": get_browser_fingerprint_headers()["user-agent"]}

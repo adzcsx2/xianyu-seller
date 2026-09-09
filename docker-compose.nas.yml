@@ -32,7 +32,9 @@ services:
       LOG_LEVEL: INFO
 
       # false 为免登录，true 为手动登录。开放公网前必须改为 true 并设置强密码。
-      ADMIN_LOGIN_ENABLED: "false"
+      ADMIN_LOGIN_ENABLED: "${ADMIN_LOGIN_ENABLED:-true}"
+      SESSION_TIMEOUT_SECONDS: "${SESSION_TIMEOUT_SECONDS:-86400}"
+      AUTO_SLIDER_ENABLED: "${AUTO_SLIDER_ENABLED:-false}"
       # 每次启动都会同步内置管理员账号；默认账号 admin / admin123。
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin123

@@ -5,7 +5,7 @@
 
 import asyncio
 import base64
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Tuple
 from loguru import logger
 from playwright.async_api import Page
 
@@ -17,7 +17,12 @@ class CaptchaRemoteController:
         self.active_sessions: Dict[str, Dict[str, Any]] = {}
         self.websocket_connections: Dict[str, Any] = {}
     
-    async def create_session(self, session_id: str, page: Page) -> Dict[str, str]:
+    async def create_session(
+        self,
+        session_id: str,
+        page: Page,
+        owner_user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         创建远程控制会话
         
@@ -28,13 +33,6 @@ class CaptchaRemoteController:
         Returns:
             包含会话信息的字典
         """
-        # 获取滑块元素位置
-        captcha_info = await self._get_captcha_info(page)
-        
-        # 只截取滑块区域，不截取整个页面（性能优化）
-        screenshot_bytes = await self._screenshot_captcha_area(page, captcha_info)
-        screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
-        
         # 获取视口大小
         try:
             viewport = page.viewport_size
@@ -43,6 +41,14 @@ class CaptchaRemoteController:
                 viewport = await page.evaluate("() => ({width: window.innerWidth, height: window.innerHeight})")
         except:
             viewport = {'width': 1280, 'height': 720}  # 默认值
+
+        # 获取滑块元素位置，只截取滑块区域，并记录截图相对页面的原点。
+        captcha_info = await self._get_captcha_info(page)
+        requested_clip = self._build_screenshot_clip(captcha_info, viewport)
+        screenshot_bytes, screenshot_clip = await self._screenshot_captcha_area(
+            page, requested_clip, viewport
+        )
+        screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
         
         # 存储会话
         self.active_sessions[session_id] = {
@@ -50,7 +56,9 @@ class CaptchaRemoteController:
             'screenshot': screenshot_base64,
             'captcha_info': captcha_info,
             'completed': False,
-            'viewport': viewport
+            'viewport': viewport,
+            'screenshot_clip': screenshot_clip,
+            'owner_user_id': owner_user_id,
         }
         
         logger.info(f"✅ 创建远程控制会话: {session_id}")
@@ -62,37 +70,46 @@ class CaptchaRemoteController:
             'viewport': self.active_sessions[session_id]['viewport']
         }
     
-    async def _screenshot_captcha_area(self, page: Page, captcha_info: Dict[str, Any]) -> bytes:
+    @staticmethod
+    def _build_screenshot_clip(
+        captcha_info: Optional[Dict[str, Any]], viewport: Dict[str, Any]
+    ) -> Dict[str, float]:
+        if captcha_info and 'x' in captcha_info:
+            return {
+                'x': max(0, captcha_info['x'] - 10),
+                'y': max(0, captcha_info['y'] - 10),
+                'width': captcha_info['width'] + 20,
+                'height': captcha_info['height'] + 20,
+            }
+        return {
+            'x': 0,
+            'y': 0,
+            'width': viewport['width'],
+            'height': viewport['height'],
+        }
+
+    async def _screenshot_captcha_area(
+        self,
+        page: Page,
+        screenshot_clip: Dict[str, float],
+        viewport: Dict[str, Any],
+    ) -> Tuple[bytes, Dict[str, float]]:
         """截取整个验证码容器区域"""
         try:
-            if captcha_info and 'x' in captcha_info:
-                # 直接截取整个容器，稍微留一点边距
-                x = max(0, captcha_info['x'] - 10)
-                y = max(0, captcha_info['y'] - 10)
-                width = captcha_info['width'] + 20
-                height = captcha_info['height'] + 20
-                
-                # 截取整个验证码容器
-                screenshot_bytes = await page.screenshot(
-                    type='jpeg',
-                    quality=80,  # 验证码区域用高质量
-                    clip={
-                        'x': x,
-                        'y': y,
-                        'width': width,
-                        'height': height
-                    }
-                )
-                logger.info(f"✅ 截取验证码容器: {width}x{height} (包含完整验证码)")
-                return screenshot_bytes
-            else:
-                # 如果没有找到滑块，截取整个页面
-                logger.warning("未找到滑块位置，截取整个页面")
-                return await page.screenshot(type='jpeg', quality=75, full_page=False)
-                
+            screenshot_bytes = await page.screenshot(
+                type='jpeg', quality=80, clip=screenshot_clip
+            )
+            logger.info(
+                f"✅ 截取验证码容器: {screenshot_clip['width']}x"
+                f"{screenshot_clip['height']} (包含完整验证码)"
+            )
+            return screenshot_bytes, screenshot_clip
         except Exception as e:
             logger.warning(f"截取滑块区域失败，使用全页面: {e}")
-            return await page.screenshot(type='jpeg', quality=75, full_page=False)
+            screenshot_bytes = await page.screenshot(
+                type='jpeg', quality=75, full_page=False
+            )
+            return screenshot_bytes, self._build_screenshot_clip(None, viewport)
     
     async def _get_captcha_info(self, page: Page) -> Dict[str, Any]:
         """获取滑块验证码信息（查找整个容器）"""
@@ -162,28 +179,12 @@ class CaptchaRemoteController:
             return None
         
         try:
-            page = self.active_sessions[session_id]['page']
-            captcha_info = self.active_sessions[session_id].get('captcha_info')
-            
-            # 截取整个验证码容器
-            if captcha_info and 'x' in captcha_info:
-                x = max(0, captcha_info['x'] - 10)
-                y = max(0, captcha_info['y'] - 10)
-                width = captcha_info['width'] + 20
-                height = captcha_info['height'] + 20
-                
-                screenshot_bytes = await page.screenshot(
-                    type='jpeg',
-                    quality=quality,
-                    clip={'x': x, 'y': y, 'width': width, 'height': height}
-                )
-            else:
-                # 降级方案：截取整个页面
-                screenshot_bytes = await page.screenshot(
-                    type='jpeg',
-                    quality=quality,
-                    full_page=False
-                )
+            session_data = self.active_sessions[session_id]
+            page = session_data['page']
+            screenshot_clip = session_data['screenshot_clip']
+            screenshot_bytes = await page.screenshot(
+                type='jpeg', quality=quality, clip=screenshot_clip
+            )
             
             screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
             self.active_sessions[session_id]['screenshot'] = screenshot_base64
@@ -211,20 +212,37 @@ class CaptchaRemoteController:
             return False
         
         try:
-            page = self.active_sessions[session_id]['page']
+            session_data = self.active_sessions[session_id]
+            page = session_data['page']
+            screenshot_clip = session_data.get('screenshot_clip') or {
+                'x': 0,
+                'y': 0,
+                'width': session_data.get('viewport', {}).get('width', 1280),
+                'height': session_data.get('viewport', {}).get('height', 720),
+            }
+
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                logger.warning("鼠标坐标不是数字")
+                return False
+            if not (0 <= x < screenshot_clip['width'] and 0 <= y < screenshot_clip['height']):
+                logger.warning(f"鼠标坐标超出验证码截图范围: ({x}, {y})")
+                return False
+
+            page_x = screenshot_clip['x'] + x
+            page_y = screenshot_clip['y'] + y
             
             if event_type == 'down':
-                await page.mouse.move(x, y)
+                await page.mouse.move(page_x, page_y)
                 await page.mouse.down()
-                logger.debug(f"鼠标按下: ({x}, {y})")
+                logger.debug(f"鼠标按下: ({page_x}, {page_y})")
                 
             elif event_type == 'move':
-                await page.mouse.move(x, y)
-                logger.debug(f"鼠标移动: ({x}, {y})")
+                await page.mouse.move(page_x, page_y)
+                logger.debug(f"鼠标移动: ({page_x}, {page_y})")
                 
             elif event_type == 'up':
                 await page.mouse.up()
-                logger.debug(f"鼠标释放: ({x}, {y})")
+                logger.debug(f"鼠标释放: ({page_x}, {page_y})")
                 
             else:
                 logger.warning(f"未知事件类型: {event_type}")
@@ -364,4 +382,3 @@ class CaptchaRemoteController:
 
 # 全局实例
 captcha_controller = CaptchaRemoteController()
-

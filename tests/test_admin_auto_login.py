@@ -80,6 +80,18 @@ class AdminAutoLoginTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertIn(marker, (root / filename).read_text(encoding="utf-8"))
 
+    def test_compose_forwards_configurable_session_ttl(self):
+        root = Path(__file__).resolve().parents[1]
+        marker = 'SESSION_TIMEOUT_SECONDS: "${SESSION_TIMEOUT_SECONDS:-86400}"'
+
+        for filename in (
+            "docker-compose.yml",
+            "docker-compose-cn.yml",
+            "docker-compose.nas.yml",
+        ):
+            with self.subTest(filename=filename):
+                self.assertIn(marker, (root / filename).read_text(encoding="utf-8"))
+
     def test_empty_login_requires_credentials_when_admin_login_is_enabled(self):
         with (
             patch.object(reply_server, "ADMIN_USERNAME", "env-admin"),

@@ -10,6 +10,7 @@ import time
 import random
 from loguru import logger
 from DrissionPage import Chromium, ChromiumOptions
+from utils.mtop_browser_fingerprint import build_mtop_request_headers
 
 def log_captcha_event(cookie_id: str, event_type: str, success: bool = None, details: str = ""):
     """简单记录滑块验证事件到txt文件"""
@@ -1734,22 +1735,9 @@ class XianyuApis:
     def __init__(self):
         self.url = 'https://h5api.m.goofish.com/h5/mtop.taobao.idlemessage.pc.login.token/1.0/'
         self.session = requests.Session()
-        self.session.headers.update({
-            'accept': 'application/json',
-            'accept-language': 'zh-CN,zh;q=0.9',
-            'cache-control': 'no-cache',
-            'origin': 'https://www.goofish.com',
-            'pragma': 'no-cache',
-            'priority': 'u=1, i',
-            'referer': 'https://www.goofish.com/',
-            'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-        })
+        headers = build_mtop_request_headers("")
+        headers.pop("cookie", None)
+        self.session.headers.update(headers)
         
     def clear_duplicate_cookies(self):
         """清理重复的cookies"""

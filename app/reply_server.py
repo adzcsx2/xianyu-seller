@@ -56,7 +56,7 @@ product_automation = ProductAutomationService(db_manager)
 
 # 刮刮乐远程控制路由
 try:
-    from app.api_captcha_remote import router as captcha_router
+    from app.api_captcha_remote import configure_captcha_auth, router as captcha_router
     CAPTCHA_ROUTER_AVAILABLE = True
 except ImportError:
     logger.warning("⚠️ api_captcha_remote 未找到，刮刮乐远程控制功能不可用")
@@ -67,14 +67,20 @@ KEYWORDS_FILE = PROJECT_ROOT / "回复关键字.txt"
 
 # 简单的用户认证配置
 ADMIN_USERNAME = (os.getenv("ADMIN_USERNAME") or "admin").strip() or "admin"
-ADMIN_LOGIN_ENABLED = os.getenv("ADMIN_LOGIN_ENABLED", "false").strip().lower() in {
+ADMIN_LOGIN_ENABLED = os.getenv("ADMIN_LOGIN_ENABLED", "true").strip().lower() in {
     "1",
     "true",
     "yes",
     "on",
 }
 DEFAULT_ADMIN_PASSWORD = "admin123"
-SESSION_TOKENS = {}  # 存储永久会话token；仅主动登出或服务进程重启时撤销
+try:
+    SESSION_TIMEOUT_SECONDS = max(
+        60, int(os.getenv("SESSION_TIMEOUT_SECONDS", str(24 * 60 * 60)))
+    )
+except (TypeError, ValueError):
+    SESSION_TIMEOUT_SECONDS = 24 * 60 * 60
+SESSION_TOKENS = {}  # 登录模式按 TTL 过期；免登录模式的自动会话永久有效
 
 # HTTP Bearer认证
 security = HTTPBearer(auto_error=False)
@@ -365,16 +371,30 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def resolve_session_token(token: str) -> Optional[Dict[str, Any]]:
+    """解析会话；仅免登录模式创建的自动会话不受 TTL 限制。"""
+    token_data = SESSION_TOKENS.get(token)
+    if not token_data:
+        return None
+
+    if not ADMIN_LOGIN_ENABLED and token_data.get("non_expiring") is True:
+        return token_data
+
+    created_at = token_data.get("timestamp")
+    if not isinstance(created_at, (int, float)):
+        SESSION_TOKENS.pop(token, None)
+        return None
+    if time.time() - created_at > SESSION_TIMEOUT_SECONDS:
+        SESSION_TOKENS.pop(token, None)
+        return None
+    return token_data
+
+
 def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict[str, Any]]:
-    """验证token并返回用户信息"""
+    """验证 token 并返回用户信息。"""
     if not credentials:
         return None
-
-    token = credentials.credentials
-    if token not in SESSION_TOKENS:
-        return None
-
-    return SESSION_TOKENS[token]
+    return resolve_session_token(credentials.credentials)
 
 
 def verify_admin_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
@@ -493,6 +513,7 @@ app = FastAPI(
 
 # 注册刮刮乐远程控制路由
 if CAPTCHA_ROUTER_AVAILABLE:
+    configure_captcha_auth(resolve_session_token)
     app.include_router(captcha_router)
     logger.info("✅ 已注册刮刮乐远程控制路由: /api/captcha")
 else:
@@ -693,6 +714,7 @@ async def login(request: LoginRequest):
             "username": user["username"],
             "is_admin": True,
             "timestamp": time.time(),
+            "non_expiring": True,
         }
         logger.info(f"【{user['username']}#{user['id']}】免登录会话创建成功")
         return LoginResponse(
@@ -3972,6 +3994,7 @@ def get_public_system_settings():
             "email_verification_enabled",
         }
         result = {k: v for k, v in all_settings.items() if k in public_keys}
+        result["admin_login_enabled"] = "true" if ADMIN_LOGIN_ENABLED else "false"
         # 没写过这项的老库按开启处理，与后端校验逻辑保持一致
         result.setdefault("email_verification_enabled", "true")
         return result
@@ -3982,7 +4005,8 @@ def get_public_system_settings():
             "registration_enabled": "true",
             "show_default_login_info": "true",
             "login_captcha_enabled": "true",
-            "email_verification_enabled": "true"
+            "email_verification_enabled": "true",
+            "admin_login_enabled": "true" if ADMIN_LOGIN_ENABLED else "false",
         }
 
 
@@ -9463,12 +9487,16 @@ async def start_manual_captcha(
         _instance = cookie_manager.manager.instances.get(cookie_id)
         if _instance is not None:
             _instance.manual_captcha_in_progress = True
+            _instance.manual_captcha_required = True
             log_with_user('info', f"账号 {cookie_id} 已暂停自动验证，等待人工完成", current_user)
 
     try:
         timeout = max(60, min(int(timeout or 300), 900))
         result = await open_manual_session(
-            cookie_id, user_cookies[cookie_id], timeout=timeout
+            cookie_id,
+            user_cookies[cookie_id],
+            timeout=timeout,
+            owner_user_id=current_user['user_id'],
         )
     finally:
         if _instance is not None:
@@ -9486,19 +9514,25 @@ async def start_manual_captcha(
         # 保存新 Cookie 并解除风控熔断，让账号能立刻重连
         db_manager.save_cookie(cookie_id, result['cookies_str'])
 
-        # 运行中的实例仍持有旧 Cookie，不同步会继续用旧值打接口并立刻再次熔断
+        # 用管理器的标准更新路径重启账号。只改运行中实例的字段会让主循环仍在
+        # 一小时的“等待人工验证”休眠里，用户滑过后也不能立即恢复连接。
         try:
             manager = cookie_manager.manager
             if manager is not None:
-                manager.cookies[cookie_id] = result['cookies_str']
-                instance = manager.instances.get(cookie_id)
-                if instance is not None:
-                    instance.cookies_str = result['cookies_str']
-                    # 清掉失效令牌，强制下次请求重新获取
-                    instance.current_token = None
-                    log_with_user('info', f"账号 {cookie_id} 运行实例已同步新 Cookie", current_user)
+                await asyncio.to_thread(
+                    manager.update_cookie,
+                    cookie_id,
+                    result['cookies_str'],
+                    False,
+                )
+                log_with_user('info', f"账号 {cookie_id} 已用新 Cookie 重启", current_user)
         except Exception as exc:
-            log_with_user('warning', f"同步实例 Cookie 失败: {exc}", current_user)
+            # 重启失败时至少同步内存并解除人工等待，下一次连接仍可尝试恢复。
+            if _instance is not None:
+                _instance.cookies_str = result['cookies_str']
+                _instance.current_token = None
+                _instance.manual_captcha_required = False
+            log_with_user('warning', f"重启账号失败，已回退为内存同步: {exc}", current_user)
 
         try:
             from utils import risk_control
@@ -9551,6 +9585,7 @@ async def get_fresh_captcha_url(
 
     import aiohttp
     from app.config import API_ENDPOINTS
+    from utils.mtop_browser_fingerprint import build_mtop_request_headers
     from utils.xianyu_utils import trans_cookies, generate_sign, generate_device_id
 
     cookies_str = user_cookies[cookie_id]
@@ -9584,17 +9619,7 @@ async def get_fresh_captcha_url(
         'spm_pre': 'a21ybx.home.sidebar.1.4c053da6vYwnmf',
         'log_id': '4c053da6vYwnmf',
     }
-    headers = {
-        'accept': 'application/json',
-        'content-type': 'application/x-www-form-urlencoded',
-        'user-agent': (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
-        ),
-        'referer': 'https://www.goofish.com/',
-        'origin': 'https://www.goofish.com',
-        'cookie': cookies_str,
-    }
+    headers = build_mtop_request_headers(cookies_str)
 
     try:
         async with aiohttp.ClientSession() as session:

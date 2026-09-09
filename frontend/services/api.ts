@@ -27,6 +27,7 @@ export const getPublicSettings = async (): Promise<{
   show_default_login_info?: string;
   login_captcha_enabled?: string;
   email_verification_enabled?: string;
+  admin_login_enabled?: string;
 }> => {
   return get('/system-settings/public');
 };

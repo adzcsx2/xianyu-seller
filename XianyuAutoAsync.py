@@ -41,6 +41,15 @@ class ConnectionState(Enum):
     CLOSED = "closed"  # 已关闭
 
 
+class ManualCaptchaRequired(Exception):
+    """账号已转入人工滑块流程，自动连接循环应停止刷新 Token。"""
+
+
+def is_auto_slider_enabled(value) -> bool:
+    """自动滑块属于显式选择功能；默认转人工，避免失败重试加重风控。"""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class ItemListTransientError(Exception):
     """商品列表接口的临时故障（网关 5xx、响应不是 JSON 等）。
 
@@ -852,6 +861,8 @@ class XianyuLive:
         self.captcha_verification_count = 0  # 滑块验证次数计数器
         self.max_captcha_verification_count = 3  # 最大滑块验证次数，防止无限递归
         self.manual_captcha_in_progress = False  # 人工滑块验证进行中标志，暂停自动验证避免争抢浏览器槽位
+        self.manual_captcha_required = False  # 自动流程已让路，等待用户从账号管理页人工完成
+        self.auto_slider_enabled = is_auto_slider_enabled(os.getenv("AUTO_SLIDER_ENABLED"))
 
         # WebSocket连接监控
         self.connection_state = ConnectionState.DISCONNECTED  # 连接状态
@@ -2077,6 +2088,15 @@ class XianyuLive:
             # 重置“刷新流程内已重启”标记，避免多次重启
             self.restarted_in_browser_refresh = False
 
+            # 自动滑块失败或系统已明确转入人工处理后，不再请求 MTOP 获取新挑战。
+            # 否则每轮连接重试都会生成新的 x5secdata，使用户正在操作的页面立刻失效。
+            if getattr(self, 'manual_captcha_required', False):
+                logger.warning(
+                    f"【{self.cookie_id}】正在等待人工滑块验证，跳过自动 Token 刷新"
+                )
+                self.last_token_refresh_status = "manual_captcha_required"
+                return None
+
             # 风控冷却期内不再尝试刷新 —— 持续请求会让风控一直不解除
             from utils import risk_control
             guard = risk_control.registry.get(self.cookie_id)
@@ -2263,6 +2283,7 @@ class XianyuLive:
                                     )
                                 self.needs_relogin = False
                                 self.relogin_reason = ''
+                                self.manual_captcha_required = False
                                 risk_control.registry.get(self.cookie_id).reset()
                                 return new_token
 
@@ -2293,6 +2314,36 @@ class XianyuLive:
                         except Exception as log_e:
                             logger.error(f"【{self.cookie_id}】记录风控日志失败: {log_e}")
 
+                        # 自动轨迹很容易被行为风控识别，而且一旦失败，后续重连会不断
+                        # 刷新挑战 URL，导致人工页面“刚打开就失效”。默认直接交给人工；
+                        # 仅部署者显式设置 AUTO_SLIDER_ENABLED=true 时保留旧自动流程。
+                        if not getattr(self, 'auto_slider_enabled', False):
+                            self.manual_captcha_required = True
+                            self.last_token_refresh_status = "manual_captcha_required"
+                            cooldown = guard.trip("检测到滑块验证，等待人工处理")
+                            already_tripped = True
+                            if log_id:
+                                try:
+                                    db_manager.update_risk_control_log(
+                                        log_id=log_id,
+                                        processing_result="已停止自动滑块，等待人工验证",
+                                        processing_status='processing',
+                                    )
+                                except Exception as update_e:
+                                    logger.warning(
+                                        f"【{self.cookie_id}】更新人工验证状态失败: {update_e}"
+                                    )
+                            logger.warning(
+                                f"【{self.cookie_id}】已转入人工滑块流程；自动请求已暂停，"
+                                f"请在账号管理页点击“人工验证”（冷却 {cooldown} 秒）"
+                            )
+                            await self.send_token_refresh_notification(
+                                "闲鱼要求滑块验证，系统已停止自动重试。"
+                                "请在账号管理页点击“人工验证”完成处理。",
+                                "captcha_manual_required",
+                            )
+                            return None
+
                         try:
                             # 尝试通过滑块验证获取新的cookies
                             captcha_start_time = time.time()
@@ -2321,6 +2372,8 @@ class XianyuLive:
                                 return await self.refresh_token(captcha_retry_count + 1)
                             else:
                                 logger.error(f"【{self.cookie_id}】滑块验证失败")
+                                self.manual_captcha_required = True
+                                self.last_token_refresh_status = "manual_captcha_required"
 
                                 # 自动验证失败后立即熔断。实测滑块虽被拖到目标位置，
                                 # 服务端仍判定失败（行为特征识别），继续自动重试不会成功，
@@ -2832,15 +2885,11 @@ class XianyuLive:
                 merged_cookies_str = '; '.join([f"{k}={v}" for k, v in merged_cookies_dict.items()])
                 logger.info(f"【{self.cookie_id}】合并后cookies包含 {len(merged_cookies_dict)} 个字段")
                 
-                # 打印合并后的Cookie字段详情
-                logger.info(f"【{self.cookie_id}】========== 合并后Cookie字段详情 ==========")
-                logger.info(f"【{self.cookie_id}】Cookie字段数: {len(merged_cookies_dict)}")
-                logger.info(f"【{self.cookie_id}】Cookie字段列表:")
-                for i, (key, value) in enumerate(merged_cookies_dict.items(), 1):
-                    if len(str(value)) > 50:
-                        logger.info(f"【{self.cookie_id}】  {i:2d}. {key}: {str(value)[:30]}...{str(value)[-20:]} (长度: {len(str(value))})")
-                    else:
-                        logger.info(f"【{self.cookie_id}】  {i:2d}. {key}: {value}")
+                # Cookie 值属于登录凭据，日志只记录字段名和数量。
+                logger.info(
+                    f"【{self.cookie_id}】合并后Cookie字段名: "
+                    f"{', '.join(sorted(merged_cookies_dict.keys()))}"
+                )
                 
                 # 检查关键字段
                 important_keys = ['unb', '_m_h5_tk', '_m_h5_tk_enc', 'cookie2', 't', 'sgcookie', 'cna']
@@ -3042,16 +3091,6 @@ class XianyuLive:
                     f"【{self.cookie_id}】Cookie读取完成: "
                     f"fields={len(result)}, names={sorted(result.keys())}"
                 )
-                
-                # 打印密码登录获取的Cookie字段详情
-                logger.info(f"【{self.cookie_id}】========== 密码登录Cookie字段详情 ==========")
-                logger.info(f"【{self.cookie_id}】Cookie字段数: {len(result)}")
-                logger.info(f"【{self.cookie_id}】Cookie字段列表:")
-                for i, (key, value) in enumerate(result.items(), 1):
-                    if len(str(value)) > 50:
-                        logger.info(f"【{self.cookie_id}】  {i:2d}. {key}: {str(value)[:30]}...{str(value)[-20:]} (长度: {len(str(value))})")
-                    else:
-                        logger.info(f"【{self.cookie_id}】  {i:2d}. {key}: {value}")
                 
                 # 检查关键字段
                 important_keys = ['unb', '_m_h5_tk', '_m_h5_tk_enc', 'cookie2', 't', 'sgcookie', 'cna']
@@ -6852,6 +6891,8 @@ class XianyuLive:
                 await self.send_token_refresh_notification("初始化时无法获取有效Token", "token_init_failed")
             else:
                 logger.info("由于刚刚尝试过token刷新，跳过重复的初始化失败通知")
+            if getattr(self, 'manual_captcha_required', False):
+                raise ManualCaptchaRequired("需要人工滑块验证")
             raise Exception("Token获取失败")
 
         msg = {
@@ -10487,7 +10528,24 @@ class XianyuLive:
                     error_msg = self._safe_str(e)
                     import traceback
                     error_type = type(e).__name__
-                    
+
+                    # 人工滑块是一个等待用户操作的终态，不计为连接失败，也不进入
+                    # 60 秒重连循环。人工验证成功后 API 会用新 Cookie 重启账号任务。
+                    if (
+                        isinstance(e, ManualCaptchaRequired)
+                        or getattr(self, 'manual_captcha_required', False)
+                    ):
+                        self.connection_failures = 0
+                        self._set_connection_state(
+                            ConnectionState.FAILED, "需要人工滑块验证"
+                        )
+                        logger.warning(
+                            f"【{self.cookie_id}】自动连接已暂停，等待账号管理页人工验证；"
+                            "期间不会刷新挑战 URL"
+                        )
+                        await self._interruptible_sleep(3600)
+                        continue
+
                     # 检查是否是 ConnectionClosedError（正常的连接关闭）
                     is_connection_closed = (
                         'ConnectionClosedError' in error_type or 

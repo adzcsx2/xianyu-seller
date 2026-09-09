@@ -40,14 +40,14 @@ DEFAULT_HEADERS:
   pragma: no-cache
   priority: u=1, i
   referer: https://www.goofish.com/
-  sec-ch-ua: '"Not=A?Brand";v="99", "Microsoft Edge";v="151", "Chromium";v="151"'
+  sec-ch-ua: '"Chromium";v="151", "Not=A?Brand";v="99"'
   sec-ch-ua-mobile: '?0'
   sec-ch-ua-platform: '"Windows"'
   sec-fetch-dest: empty
   sec-fetch-mode: cors
   sec-fetch-site: same-site
   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
-    like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
+    like Gecko) Chrome/151.0.0.0 Safari/537.36
 HEARTBEAT_INTERVAL: 15
 HEARTBEAT_TIMEOUT: 30
 LOG_CONFIG:
