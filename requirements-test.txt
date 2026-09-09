@@ -1,0 +1,4 @@
+# Local automation test tooling. Runtime deployments do not need this file.
+-r requirements.txt
+
+coverage>=7.6,<8.0

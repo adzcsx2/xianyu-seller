@@ -47,7 +47,7 @@ playwright==1.60.0
 # Playwright 的反检测分支，滑块验证优先用它：同一份 Chromium 下，Playwright 会把
 # navigator.webdriver 暴露成 true（最容易被查的自动化标志），Patchright 则是 false。
 # API 完全兼容，复用上面那份 Chromium（代码里显式传 executable_path），不额外下载。
-patchright>=1.52.0
+patchright==1.62.3
 DrissionPage>=4.0.0
 
 # ==================== 加密和安全 ====================
