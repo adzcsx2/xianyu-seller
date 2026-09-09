@@ -43,7 +43,42 @@ class AdminAutoLoginTests(unittest.TestCase):
         self.assertTrue(response.is_admin)
         self.assertEqual(response.username, "env-admin")
         self.assertIn(response.token, reply_server.SESSION_TOKENS)
+        self.assertTrue(reply_server.SESSION_TOKENS[response.token]["non_expiring"])
         verify_password.assert_not_called()
+
+    def test_public_settings_expose_the_login_mode(self):
+        with (
+            patch.object(reply_server, "ADMIN_LOGIN_ENABLED", False),
+            patch.object(
+                reply_server.db_manager,
+                "get_all_system_settings",
+                return_value={},
+            ),
+        ):
+            settings = reply_server.get_public_system_settings()
+
+        self.assertEqual(settings["admin_login_enabled"], "false")
+
+    def test_frontend_never_renders_login_form_for_auto_login_mode(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "frontend" / "App.tsx"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("admin_login_enabled", source)
+        self.assertIn("loginRequired === false", source)
+
+    def test_deployment_defaults_require_login(self):
+        root = Path(__file__).resolve().parents[1]
+        expected = {
+            ".env.example": "ADMIN_LOGIN_ENABLED=true",
+            "docker-compose.yml": 'ADMIN_LOGIN_ENABLED: "${ADMIN_LOGIN_ENABLED:-true}"',
+            "docker-compose-cn.yml": 'ADMIN_LOGIN_ENABLED: "${ADMIN_LOGIN_ENABLED:-true}"',
+            "docker-compose.nas.yml": 'ADMIN_LOGIN_ENABLED: "${ADMIN_LOGIN_ENABLED:-true}"',
+        }
+
+        for filename, marker in expected.items():
+            with self.subTest(filename=filename):
+                self.assertIn(marker, (root / filename).read_text(encoding="utf-8"))
 
     def test_empty_login_requires_credentials_when_admin_login_is_enabled(self):
         with (

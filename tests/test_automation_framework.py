@@ -152,6 +152,14 @@ class AutomationFrameworkTests(unittest.TestCase):
 
         self.assertIn("process.chdir(frontendDir);", source)
 
+    def test_detached_build_accepts_the_runner_artifact_root(self):
+        source = (PROJECT_ROOT / "frontend" / "scripts" / "build-test.mjs").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("'logs', 'test-artifacts'", source)
+        self.assertNotIn("'.tmp', 'test-artifacts'", source)
+
     def test_cli_can_list_suites_without_preparing_a_database(self):
         completed = subprocess.run(
             [sys.executable, os.fspath(RUNNER_PATH), "--list"],

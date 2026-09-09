@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from utils.log_sanitizer import REDACTED, redact_sensitive_text
 
@@ -28,6 +29,15 @@ class LogSanitizerTests(unittest.TestCase):
     def test_keeps_non_sensitive_diagnostics(self):
         message = "status=200 cookie_fields=18 payload_length=42"
         self.assertEqual(redact_sensitive_text(message), message)
+
+    def test_password_login_never_logs_cookie_values(self):
+        source = (
+            Path(__file__).resolve().parent.parent / "XianyuAutoAsync.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("str(value)[:30]", source)
+        self.assertNotIn("str(value)[-20:]", source)
+        self.assertNotIn("{key}: {value}", source)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,11 @@ class ManualCaptchaFrontendRetryTests(unittest.TestCase):
         )
         self.assertIn("retry < CAPTCHA_WS_RETRY_LIMIT", source)
 
+    def test_external_browser_flow_discloses_manual_cookie_refill(self):
+        source = ACCOUNT_LIST.read_text(encoding="utf-8")
+
+        self.assertIn("需手动回填 Cookie", source)
+
 
 if __name__ == "__main__":
     unittest.main()
