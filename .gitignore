@@ -810,3 +810,39 @@ frontend/coverage/
 # Wrangler 本地缓存（Cloudflare Worker 部署产生）
 .wrangler/
 deploy/.wrangler/
+
+# dt:init local worktree and CodeGraph index
+/.worktree/
+.codegraph/
+
+# dt:init project guidance and managed hooks
+!CLAUDE.md
+!AGENT.md
+!.github/copilot-instructions.md
+!docs/**/*.md
+!.claude/
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/final-rule-audit.ps1
+
+# Local runtime logs and private knowledge content
+# All application, diagnostic, and test logs belong under this directory.
+/logs/
+
+# Knowledge-base contents are private runtime/business data. Keep only code.
+/app/knowledge/*
+!/app/knowledge/__init__.py
+
+# Logged-in account state and authentication artifacts
+# These paths may contain live cookies, tokens, browser profiles, QR codes,
+# account identifiers, or other private session data.
+/browser_data/
+/slider_cookies/
+/cookies/
+/sessions/
+/account_data/
+/login_data/
+/storage_state/
+/auth_state/
+/qrcodes/
+/captcha/

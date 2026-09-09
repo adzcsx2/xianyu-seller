@@ -1,231 +1,172 @@
-# 闲鱼智控（闲鱼超级管家）
+# 闲鱼超级管家 · 知识库增强版
 
-面向闲鱼卖家的账号、商品、订单、消息、自动回复与自动发货一体化管理系统。
+面向闲鱼卖家的多账号运营与自动化管理工具，提供商品、订单、消息、自动回复、自动发货和 AI 知识库的一体化后台。
 
-[![GitHub Stars](https://img.shields.io/github/stars/23Star/xianyu-super-butler?style=flat&logo=github&color=f5b301)](https://github.com/23Star/xianyu-super-butler/stargazers)
-[![Version](https://img.shields.io/badge/Version-3.1.0-52c41a)](https://github.com/23Star/xianyu-super-butler/releases)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-222222)](LICENSE)
+[![Upstream](https://img.shields.io/badge/Upstream-23Star%2Fxianyu--super--butler-f5b301?logo=github)](https://github.com/23Star/xianyu-super-butler)
 
-**一个人，把几十个闲鱼账号做成一门自动运转的生意。**
-
-多账号统一托管，买家下单自动发卡密、自动确认收货、自动评价、自动求小红花、收货后自动致谢。
-关键词和 AI 双层自动回复接住每一句咨询，商品与订单自动同步，滑块与人机验证自动处理。
-从「盯着手机一个个回」变成「打开网页看数据」。
-
-- 🏪 **多账号管理** — 扫码即接入，一个后台管完所有小号，逐账号独立配置策略
-- 📦 **自动发货** — 卡密自动发出，支持多规格、多数量，发货前风险拦截
-- 💬 **自动回复** — 关键词精确命中 + AI 议价，可设最低价与议价轮数，绝不越线让价
-- ⭐ **买家互动** — 确认收货后自动评价、自动求小红花、自动发送致谢文本
-- 🤖 **商品自动化** — 商品同步、素材库、定时擦亮、自动上下架
-- 📊 **经营看板** — 成交额、到账、退款、订单和库存一屏掌握，**历史订单可一次性拉回**
+> 本项目 fork 自 [23Star/xianyu-super-butler](https://github.com/23Star/xianyu-super-butler)，在保留原有自动化能力的基础上，加入了全局知识库、商品知识绑定等个人增强功能。感谢上游项目及其贡献者的开源工作。
 
 ![闲鱼超级管家运营概览](docs/screenshots/revenue-overview.png)
 
-## 核心功能
+## 项目特色
 
-| 模块 | 能力 |
+- **多账号统一管理**：扫码、密码或 Cookie 接入账号，分别配置监听、回复与自动化策略。
+- **商品与订单管理**：同步商品和历史订单，集中查看状态、金额、库存及发货情况。
+- **自动发货**：支持卡密库存、多规格、多数量发货和发货前风险拦截。
+- **双层自动回复**：关键词规则负责确定性回复，兼容 OpenAI 协议的模型负责自然语言回复。
+- **全局知识库**：维护事实、来源、内部规则和公开问答，并将同一知识库复用于多个商品。
+- **买家互动**：支持自动确认、自动评价、求小红花和收货后致谢。
+- **商品自动化**：提供素材、发布记录、定时任务、擦亮及上下架相关能力。
+- **运营后台**：在一个界面查看营收、账号、订单、会话、通知和运行日志。
+
+## 知识库增强
+
+知识库是本分支相对上游的主要增强能力。进入后台的「知识库」页面后，可以：
+
+1. 创建可跨商品复用的全局知识库；
+2. 分别维护买家可见事实、来源引用、内部规则和公开问答；
+3. 为不同账号下的商品绑定一个或多个知识库；
+4. 使用当前账号配置的 AI 模型测试知识库问答；
+5. 将匹配到的知识内容安全地注入 AI 回复上下文。
+
+知识库正文属于本地业务数据，默认保存在 `data/xianyu_data.db`。`data/`、`app/knowledge/` 中的本地知识文件、已登录账号资料以及运行日志均已加入 `.gitignore`，不会作为仓库内容提交。请仍然在推送前检查 `git status`，避免通过强制添加误传商品资料、内部规则、客户信息、Cookie 或密钥。
+
+## 功能概览
+
+| 模块 | 主要能力 |
 | --- | --- |
-| 总览 | 汇总营收、账号、订单、卡密库存和运行状态 |
-| 账号 | 扫码、密码或 Cookie 登录，资料同步，监听任务状态，暂停和自动回复配置 |
-| 商品 | 从闲鱼同步商品，维护本地详情、图片、规格、数量和商品回复 |
-| 商品自动化 | 商品筛选、素材库、发布记录、定时删除、短链修复和补偿任务 |
-| 订单 | 一键拉取闲鱼历史卖出订单，状态判定、详情补全、批量刷新、手动发货和异常保护 |
-| 卡密 | 卡券分组、库存导入、状态管理、多规格和多数量发货 |
-| 自动回复 | 账号关键词回复、默认回复和回复一次控制 |
-| 人工智能回复 | 兼容 OpenAI 协议的大模型配置、上下文对话和测试 |
-| 自动发货 | 全局、指定账号、指定商品三级发货规则及发货前风险拦截 |
-| 消息管理 | 闲鱼会话列表、消息收发、搜索筛选、回复决策日志和过滤规则 |
-| 通知与日志 | 通知渠道、账号绑定、风险日志和系统日志 |
-| 设置 | 管理员账号与改密、注册与邮箱验证开关、服务、备份及系统配置 |
-| 公告与更新 | 从自建地址拉取公告与版本信息，首页横幅提示，「关于」页手动检查更新 |
+| 总览 | 营收、订单、账号、卡密库存和服务状态 |
+| 账号 | 登录、资料同步、监听控制及账号级自动化设置 |
+| 商品 | 商品同步、本地信息、图片、规格和商品回复 |
+| 订单 | 历史订单拉取、状态刷新、详情补全、手动或自动发货 |
+| 卡密 | 分组、批量导入、库存状态、多规格与多数量发货 |
+| 自动回复 | 关键词、默认回复、回复次数控制和 AI 回复 |
+| 知识库 | 全局知识管理、商品绑定、规则匹配和 AI 问答测试 |
+| 消息 | 跨账号会话、消息收发、搜索筛选和回复决策记录 |
+| 自动化 | 商品任务、买家互动、通知和备份 |
 
-## 界面预览
+## 快速开始
 
-### 账号管理：一个后台管完所有小号
+### Docker Compose（推荐）
 
-扫码添加账号，实时显示监听状态。每个账号可独立设置自动确认、人工接入暂停时长、
-是否启用 AI 回复，互不干扰。
-
-![账号管理](docs/screenshots/accounts.png)
-
-### 商品与发货：卡密自动发到买家手上
-
-同步在售商品，逐个商品绑定发货内容，支持多规格和多数量。已下架的商品会被标记出来
-并默认隐藏，不和在售的混在一起。
-
-![商品与发货](docs/screenshots/items-delivery.png)
-
-### 订单管理：接入前的历史订单也能一次拉回来
-
-「拉取卖出订单」会把闲鱼上的历史订单整批同步进来，不只是接入之后的新单，
-所以刚部署就能看到完整的经营数据。状态、买家、实付金额和发货情况一目了然，
-支持按账号和状态筛选，也能手动发货或补发。
-
-![订单管理](docs/screenshots/orders.png)
-
-### 买家互动：确认收货后的动作全部自动完成
-
-评价买家、索要小红花、发送收货致谢，三项都能逐账号开关。买家一确认收货，
-致谢立即发出，评价和求花在订单状态就绪后自动执行。
-
-![买家互动](docs/screenshots/buyer-interaction.png)
-
-### 消息中心：所有账号的会话在一个页面里
-
-跨账号会话列表，支持搜索和筛选，可以直接接管对话。自动回复的每一次决策都有日志，
-能查到为什么回了、为什么没回。
-
-![消息中心](docs/screenshots/message-center.png)
-
-## 如何部署
-
-### 一条命令直接启动（最快，不用克隆仓库）
-
-有 Docker 就能跑，不需要下载源码：
+需要 Docker 与 Docker Compose。当前分支包含自定义功能，应从源码构建镜像：
 
 ```bash
-docker run -d --name xianyu-butler \
-  -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  -v $(pwd)/backups:/app/backups \
-  -e ADMIN_USERNAME=admin \
-  -e ADMIN_PASSWORD=改成你自己的密码 \
-  --restart unless-stopped \
-  ghcr.io/23star/xianyu-super-butler:latest
-```
-
-浏览器打开 `http://服务器IP:8080` 即可。数据都在当前目录的 `data` / `logs` / `backups` 里，
-升级只需 `docker pull` 后重建容器，数据不丢。
-
-Windows PowerShell 把 `$(pwd)` 换成 `${PWD}`，续行的 `\` 换成反引号 `` ` ``。
-
-### Docker Compose（推荐长期使用）
-
-```bash
-git clone https://github.com/23Star/xianyu-super-butler.git
-cd xianyu-super-butler
-docker compose -f docker-compose.nas.yml up -d
-```
-
-同样是预构建镜像，不在本机编译任何东西，支持 amd64 / arm64。相比上面一条命令，
-Compose 的好处是配置写在文件里、改起来清楚，升级也只有一行命令。
-
-该配置不依赖 `.env`，管理员账号密码在 `docker-compose.nas.yml` 里的 `CHANGE_ME` 处直接改。
-
-### NAS 与低配设备（飞牛 fnOS、群晖、威联通、软路由、低配 VPS）
-
-**用上面那条命令，不要本地构建。**
-
-`npm ci`、前端打包、Python 依赖编译和 Chromium 下载会同时抢占 CPU 和内存，
-轻则卡十几分钟，重则内存不足被杀，反复重启表现为「装不上、机器卡死」。
-预构建镜像已同时提供 amd64 和 arm64，绕开全部编译步骤。
-
-```bash
-docker compose -f docker-compose.nas.yml up -d
-```
-
-飞牛 fnOS、群晖等图形界面的 Docker 通常没地方放 `.env`，所以这份配置把变量直接写在
-compose 文件里，改完 `CHANGE_ME` 就能用。
-
-### Docker 本地构建（需要改代码时）
-
-```bash
-cp .env.example .env          # 不改也能启动，此时使用默认密码
+git clone https://github.com/adzcsx2/xianyu-seller.git
+cd xianyu-seller
+cp .env.example .env
 docker compose up -d --build
 ```
 
-国内网络用 CN 配置（apt、pip、npm、Chromium 全部走国内镜像）：
+国内网络环境可使用：
 
 ```bash
 docker compose -f docker-compose-cn.yml up -d --build
 ```
 
-可选 Nginx：`docker compose --profile with-nginx up -d --build`
-
-### 源码运行（开发调试）
-
-需要 Python 3.11+、Node.js 20+、npm。
+启动后访问 `http://localhost:8080/`。如需启用 Nginx：
 
 ```bash
-git clone https://github.com/23Star/xianyu-super-butler.git
-cd xianyu-super-butler
+docker compose --profile with-nginx up -d --build
+```
 
+Windows PowerShell 复制环境文件时使用：
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
+```
+
+### 源码运行
+
+需要 Python 3.11+、Node.js 20+ 和 npm：
+
+```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 playwright install chromium
 
-cd frontend && npm ci && npm run build && cd ..
+Set-Location frontend
+npm ci
+npm run build
+Set-Location ..
+
 python Start.py
 ```
 
-### 访问
+### 默认入口
 
-- 管理页面：`http://localhost:8080/`
+- 管理后台：`http://localhost:8080/`
 - API 文档：`http://localhost:8080/docs`
 - 健康检查：`http://localhost:8080/health`
 
-默认管理员 **admin / admin123**，登录后请在「设置 → 账号与同步 → 修改登录密码」立即改掉。
+默认管理员账号为 `admin`，密码为 `admin123`。首次启动后请立即在后台修改密码，或在 `.env` 中设置 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD`。
 
-数据持久化到 `./data`（数据库）、`./logs`（日志）、`./backups`（备份）。
+`ADMIN_LOGIN_ENABLED=false` 会免登录进入管理后台，只适用于可信内网。只要服务可能被其他人访问，就应改为 `true`，并通过防火墙或反向代理限制管理端口。
 
-### 更新
+## 使用流程
+
+1. 登录后台并修改默认管理员密码；
+2. 在「账号」页面接入闲鱼账号并启动监听；
+3. 同步商品与订单，按需导入卡密和配置发货规则；
+4. 配置关键词回复或兼容 OpenAI 协议的 AI 模型；
+5. 在「知识库」中创建内容，再绑定到对应商品；
+6. 先通过测试与预览确认回复效果，再开启自动回复或自动发货。
+
+滑块、人机验证和部署问题参见 [部署文档](docs/deployment.md)。平台风控策略可能变化，自动验证无法保证始终成功，必要时请切换为人工验证。
+
+## 数据目录
+
+| 路径 | 内容 | Git 策略 |
+| --- | --- | --- |
+| `data/` | SQLite 数据库、账号和业务数据、知识库正文 | 忽略 |
+| `logs/` | 应用、诊断和测试日志 | 忽略 |
+| `backups/` | 本地数据库备份 | 忽略 |
+| `browser_data/` | 浏览器会话与登录状态 | 忽略 |
+| `slider_cookies/` | 滑块验证过程中产生的 Cookie 快照 | 忽略 |
+| `app/knowledge/` | 可选的本地知识种子或导入内容 | 内容忽略，仅保留程序文件 |
+
+Docker Compose 已将 `data/`、`logs/` 和 `backups/` 挂载到宿主机。升级或重建容器前请备份这些目录，但不要把备份提交到 Git。
+
+## 更新
 
 ```bash
-# 预构建镜像（推荐方式对应的更新命令）
-docker compose -f docker-compose.nas.yml pull && docker compose -f docker-compose.nas.yml up -d
-
-# 本地构建
-git pull && docker compose up -d --build
+git pull
+docker compose up -d --build
 ```
 
-> **滑块与人机验证、部署失败排查、使用流程** 见 [docs/deployment.md](docs/deployment.md)。
-> 自动过滑块受平台风控限制不保证成功，自动失败时可在账号页转人工验证。
+更新前建议备份 `data/`，并查看本分支与上游的数据库迁移说明。不要直接用上游预构建镜像覆盖本分支，否则本分支新增的前后端功能不会包含在镜像中。
 
-## 交流与反馈
+## 开发与验证
 
-<table>
-  <tr>
-    <th align="center">微信群</th>
-    <th align="center">QQ群</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/community/wechat-group.jpg" alt="闲鱼超级管家微信群二维码" width="180"></td>
-    <td align="center"><img src="docs/community/qq-group.jpg" alt="闲鱼超级管家QQ群二维码" width="180"></td>
-  </tr>
-  <tr>
-    <td align="center">二维码失效后会在仓库更新</td>
-    <td align="center">群号：704866149</td>
-  </tr>
-</table>
+```powershell
+# 查看可用测试套件
+python scripts/run_tests.py --list
 
-缺陷和功能建议请提交到 [GitHub Issues](https://github.com/23Star/xianyu-super-butler/issues)。
+# 核心回归
+python scripts/run_tests.py --suite core --database snapshot
 
-## 许可与声明
+# 完整本地质量检查
+python scripts/run_tests.py --quality --database snapshot
+```
 
-本项目基于 [zhinianboke/xianyu-auto-reply](https://github.com/zhinianboke/xianyu-auto-reply) 二次开发并持续维护，保留原项目核心能力，同时重构管理端、账号监听、商品同步、订单处理和发货规则。感谢原作者的开源工作。
+前端源码位于 `frontend/`，FastAPI 后端主要位于 `app/`，应用入口为 `Start.py`。测试产生的日志统一写入 `logs/test-artifacts/`。
 
-项目使用 [GNU Affero General Public License v3.0](LICENSE)。修改、部署或通过网络提供服务时，请遵守 AGPL-3.0 的源代码公开义务。
+## 安全与使用声明
 
-本项目仅供学习、研究和合法自动化使用。使用者应遵守法律法规及平台规则，并自行承担使用风险。
+- 不要提交 `.env`、数据库、知识库正文、日志、Cookie、密码、令牌、浏览器登录状态、二维码、卡密或任何真实账号与客户数据。
+- 不要将免登录的管理后台直接暴露到公网。
+- 自动回复、自动发货及账号操作具有业务风险，正式使用前请先用测试账号验证规则。
+- 本项目仅供学习、研究和合法自动化使用。使用者应遵守所在地法律法规及闲鱼平台规则，并自行承担使用风险。
 
-## Star History
+## 上游与许可证
 
-<a href="https://www.star-history.com/?type=date&repos=23Star%2Fxianyu-super-butler">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=23Star/xianyu-super-butler&type=date&theme=dark&legend=top-left&sealed_token=AhEE4dCbaUSe6lOSCJhYlDz04x4r2C14buYVYWlJVlulk23LKk5DgHZfMIumVkiNUPsbFO--8IX-0pXCfW8nyyEN3NStTE-16pBQggRCq6gsUZRlegeZdTbWWU-UPKWAWlnyyQyndGhz-lPX0HJrKxSCriOB1fiyJljBO7eNsd4xVYkrByhViWaPMCv9" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=23Star/xianyu-super-butler&type=date&legend=top-left&sealed_token=AhEE4dCbaUSe6lOSCJhYlDz04x4r2C14buYVYWlJVlulk23LKk5DgHZfMIumVkiNUPsbFO--8IX-0pXCfW8nyyEN3NStTE-16pBQggRCq6gsUZRlegeZdTbWWU-UPKWAWlnyyQyndGhz-lPX0HJrKxSCriOB1fiyJljBO7eNsd4xVYkrByhViWaPMCv9" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=23Star/xianyu-super-butler&type=date&legend=top-left&sealed_token=AhEE4dCbaUSe6lOSCJhYlDz04x4r2C14buYVYWlJVlulk23LKk5DgHZfMIumVkiNUPsbFO--8IX-0pXCfW8nyyEN3NStTE-16pBQggRCq6gsUZRlegeZdTbWWU-UPKWAWlnyyQyndGhz-lPX0HJrKxSCriOB1fiyJljBO7eNsd4xVYkrByhViWaPMCv9" />
-  </picture>
-</a>
+- 本分支上游：[23Star/xianyu-super-butler](https://github.com/23Star/xianyu-super-butler)
+- 上游所基于的原始项目：[zhinianboke/xianyu-auto-reply](https://github.com/zhinianboke/xianyu-auto-reply)
+- 开源许可证：[GNU Affero General Public License v3.0](LICENSE)
 
-Star 历史曲线实时读取 GitHub 数据，不需要人工更新。
-
-## Fork 网络总 Star
-
-[![Fork Network Stars](docs/fork-network-stars.svg)](https://github.com/23Star/xianyu-super-butler/network/members)
-
-该统计在主仓库 Star 之外累加全部公开 Fork 获得的 Star，每 6 小时自动刷新。由于同一用户可能同时 Star 多个仓库，此处是各仓库 Star 数之和，并非去重后的独立用户数。
+修改、部署或通过网络向用户提供本项目服务时，请遵守 AGPL-3.0 的相关义务。上游项目的商标、名称和社区渠道不代表其为本分支提供官方支持。

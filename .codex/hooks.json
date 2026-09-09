@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .codex/hooks/final-rule-audit.ps1",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

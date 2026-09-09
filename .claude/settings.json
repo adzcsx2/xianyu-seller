@@ -1,0 +1,17 @@
+{
+  "skipDangerousModePermissionPrompt": true,
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/final-rule-audit.ps1",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

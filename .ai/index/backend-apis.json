@@ -1,0 +1,5434 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-09-08T15:26:50.2099437Z",
+  "metadata": {
+    "route_count": 252,
+    "sources": [
+      {
+        "path": "app/api_captcha_remote.py",
+        "sha256": "aea3cb820ec9cc9b952df1cc1555682d1233d61f1726373eef49739387db4288"
+      },
+      {
+        "path": "app/reply_server.py",
+        "sha256": "d5024861868acb0f9f217999850363d9dec4b5ac479705d579fb2a82f4a2d3fa"
+      },
+      {
+        "path": "app/routers/delivery_block.py",
+        "sha256": "c19d09e113aeaa095f6d8d3542d217c4cc5adf0745030db1d2f13e5e2f2d3757"
+      }
+    ],
+    "warnings": [
+      "No OpenAPI/Swagger JSON contract was found; indexed code routes may have incomplete summaries and schemas."
+    ]
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "root",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 613
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/{path}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "catch_all_route",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9923
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/backup/download",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "download_database_backup",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7586
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/backup/list",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "list_backup_files",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7733
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/backup/upload",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "upload_database_backup",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7623
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/cookies",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_admin_cookies",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7090
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/data/{table_name}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "clear_table_data",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7874
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/data/{table_name}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_table_data",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7796
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/data/{table_name}/{record_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "delete_table_record",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7834
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/log-files",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "list_log_files",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7202
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/logs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_system_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7139
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/logs/export",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "export_log_file",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7244
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/reload-cache",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "reload_system_cache",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7777
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/risk-control-logs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_admin_risk_control_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7060
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/stats",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_system_stats",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7295
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/users",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_all_users",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6999
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/users/{user_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "delete_user",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7028
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai-reply-settings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_ai_reply_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6534
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai-reply-settings/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_ai_reply_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6467
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/ai-reply-settings/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_ai_reply_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6488
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai-reply-style",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_ai_reply_style",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6191
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/ai-reply-style",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_ai_reply_style",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6197
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai-reply-test/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "test_ai_reply",
+      "parameters": [],
+      "request_schemas": [
+        "AIReplyTestRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6553
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/orders",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_order_analytics",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7351
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/orders/valid",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_valid_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7395
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/announcement",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_announcement",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9188
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/captcha/check_completion",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "check_completion",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 245
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/captcha/manual-session",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "start_manual_captcha",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9406
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/captcha/mouse_event",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "handle_mouse_event",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 223
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/captcha/screenshot/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_screenshot",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 212
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/captcha/session/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "close_session",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 256
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/captcha/session/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_session_info",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 195
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/captcha/sessions",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_active_sessions",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 178
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/captcha/status/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_captcha_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/api_captcha_remote.py",
+          "line": 267
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/check-default-password",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "check_default_password",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 901
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/default-reply/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_default_reply_compat",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3550
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/default-reply/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_default_reply_compat",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3538
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/default-reply/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_default_reply_compat",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3544
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/default-reply/{cid}/clear-records",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "clear_default_reply_records_compat",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3556
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/items/polish",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "polish_items",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9719
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_user_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7969
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/orders/{order_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_order",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8134
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/{order_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_order_detail",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8105
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/orders/{order_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_order",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8277
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/{order_id}/consign-info",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_order_consign_info",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9804
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/{order_id}/logistics",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_order_logistics",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9777
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/{order_id}/refresh",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "refresh_single_order",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8169
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/{order_id}/refund-record",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_order_refund_record",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9306
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/{order_id}/require-flower",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "require_order_flower",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9832
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/import",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "import_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9020
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/manual-ship",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "manual_ship_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8626
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/rate",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "rate_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9866
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/refresh",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "refresh_orders_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8428
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/seller-features",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_seller_features",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8046
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/sync-sold",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "sync_sold_orders",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9226
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/risk-control/{cookie_id}/fresh-captcha-url",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_fresh_captcha_url",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9513
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/risk-control/status",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_risk_control_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9614
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/seller-features",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_seller_features",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8045
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/seller-features/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_seller_features",
+      "parameters": [],
+      "request_schemas": [
+        "BuyerInteractionUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 8078
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auto-reply-logs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_auto_reply_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3908
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/backup/export",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "export_backup",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5556
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/backup/import",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "import_backup",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5582
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/blacklist",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_blacklist",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 77
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/blacklist",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_blacklist",
+      "parameters": [],
+      "request_schemas": [
+        "BlacklistCreate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 89
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/blacklist/{entry_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_blacklist",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 119
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/blacklist/{entry_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_blacklist",
+      "parameters": [],
+      "request_schemas": [
+        "BlacklistUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 102
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cards",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_cards",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4955
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/cards",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_card",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4967
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/cards/{card_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_card",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5265
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cards/{card_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_card",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5008
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cards/{card_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_card",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5025
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cards/{card_id}/image",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_card_with_image",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5062
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/change-admin-password",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "change_admin_password",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 847
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/change-password",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "change_user_password",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 871
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/chat/accounts",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_chat_accounts",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1500
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/chat/conversations/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_chat_conversations",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1520
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/chat/messages/{cookie_id}/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_chat_messages",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1562
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/chat/send/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "send_chat_message",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1615
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/cookie/{cid}/account-info",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie_account_info",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2203
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookie/{cid}/details",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_cookie_account_details",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2248
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_cookies",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1952
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/cookies",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "add_cookie",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2008
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/cookies/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "remove_cookie",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4136
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2158
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies/{cid}/auto-confirm",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_auto_confirm",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4203
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}/auto-confirm",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_auto_confirm",
+      "parameters": [],
+      "request_schemas": [
+        "AutoConfirmUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4169
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}/login-info",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie_login_info",
+      "parameters": [],
+      "request_schemas": [
+        "AccountLoginInfoUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2093
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies/{cid}/pause-duration",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_cookie_pause_duration",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4322
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}/pause-duration",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie_pause_duration",
+      "parameters": [],
+      "request_schemas": [
+        "PauseDurationUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4288
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/cookies/{cid}/refresh-profile",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "refresh_cookie_profile",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2123
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies/{cid}/remark",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_cookie_remark",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4259
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}/remark",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie_remark",
+      "parameters": [],
+      "request_schemas": [
+        "RemarkUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4229
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/cookies/{cid}/status",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_cookie_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3408
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies/check",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "check_valid_cookies",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5890
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/cookies/details",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_cookies_details",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1964
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/debug/keywords-table-info",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "debug_keywords_table_info",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4926
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/default-replies",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_default_replies",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3475
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/default-replies/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_default_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3492
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/default-replies/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_default_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3432
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/default-replies/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_default_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3455
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/default-replies/{cid}/clear-records",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "clear_default_reply_records",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3515
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/delivery-block-rules/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_rules",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 58
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/delivery-block-rules/{cookie_id}/{rule_code}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_rule",
+      "parameters": [],
+      "request_schemas": [
+        "RuleUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/delivery-block-rules/metadata",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_rule_metadata",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/routers/delivery_block.py",
+          "line": 54
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/delivery-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_delivery_rules",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5165
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/delivery-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_delivery_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5177
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/delivery-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_delivery_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5295
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/delivery-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_delivery_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5217
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/delivery-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_delivery_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5234
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/face-verification/screenshot/{account_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_account_face_verification_screenshot",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2854
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/face-verification/screenshot/{account_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_account_face_verification_screenshot",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2777
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/geetest/register",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "geetest_register",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "GeetestRegisterResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1051
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/geetest/validate",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "geetest_validate",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "GeetestValidateResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1108
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/generate-captcha",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "generate_captcha",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 928
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "health_check",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 545
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/item-delivery-configs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_item_delivery_config_summaries",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5742
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/item-reply/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_item_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7504
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/item-reply/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_item_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7556
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/item-reply/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_item_reply",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7472
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/item-reply/batch",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "batch_delete_item_reply",
+      "parameters": [],
+      "request_schemas": [
+        "BatchDeleteRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7533
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/itemReplays",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_items",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7435
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/itemReplays/cookie/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_items_by_cookie",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7453
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_items",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5642
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_manual_item",
+      "parameters": [],
+      "request_schemas": [
+        "ManualItemCreate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5671
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_items_list",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4522
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/items/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_item_info",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6378
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_item_detail",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6324
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/items/{cookie_id}/{item_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_item_detail",
+      "parameters": [],
+      "request_schemas": [
+        "ItemDetailUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6350
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/{cookie_id}/{item_id}/ai-knowledge",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_product_knowledge",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "ProductKnowledgeResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6281
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/items/{cookie_id}/{item_id}/ai-knowledge",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "put_product_knowledge",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "ProductKnowledgeResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6294
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/{cookie_id}/{item_id}/ai-knowledge/import-passistant",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "import_passistant_knowledge",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "ProductKnowledgeImportResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6304
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/{cookie_id}/{item_id}/ai-knowledge/preview",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "preview_product_knowledge",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "ProductKnowledgePreviewResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6314
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/{cookie_id}/{item_id}/delivery-config",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_item_delivery_config",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5752
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/items/{cookie_id}/{item_id}/delivery-config",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "save_item_delivery_config",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5784
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/{cookie_id}/{item_id}/knowledge-bindings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_item_knowledge_bindings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6158
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/{cookie_id}/{item_id}/knowledge-bindings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "add_item_knowledge_binding",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6164
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/items/{cookie_id}/{item_id}/knowledge-bindings/{base_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "remove_item_knowledge_binding",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6171
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/{cookie_id}/{item_id}/knowledge-preview",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "preview_knowledge_binding",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6179
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/items/{cookie_id}/{item_id}/multi-quantity-delivery",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_item_multi_quantity_delivery",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7941
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/items/{cookie_id}/{item_id}/multi-spec",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_item_multi_spec",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 7917
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/items/batch",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "batch_delete_items",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6434
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/items/cookie/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_items_by_cookie",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5988
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/get-all-from-account",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_items_from_account",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6757
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/get-by-page",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_items_by_page",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6855
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/search",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "search_items",
+      "parameters": [],
+      "request_schemas": [
+        "ItemSearchRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5840
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/items/search_multiple",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "search_multiple_pages",
+      "parameters": [],
+      "request_schemas": [
+        "ItemSearchMultipleRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5938
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/keywords-export/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "export_keywords",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4563
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/keywords-import/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "import_keywords",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4650
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/keywords-with-item-id/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_keywords_with_item_id",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4384
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/keywords-with-item-id/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_keywords_with_item_id",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4437
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/keywords-with-type/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_keywords_with_type",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4868
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/keywords/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_keywords",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4355
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/keywords/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_keywords",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4415
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/keywords/{cid}/{index}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_keyword_by_index",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4887
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/keywords/{cid}/image",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "add_image_keyword",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4750
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_knowledge_bases",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6038
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_knowledge_base",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6043
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_knowledge_base",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6068
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_knowledge_base",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6051
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/knowledge-bases/{base_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_knowledge_base",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6059
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/ask",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "ask_knowledge_base",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "KnowledgeBaseAskResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6121
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}/facts",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/facts",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}/facts/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string",
+        "query:expected_version:integer"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/knowledge-bases/{base_id}/facts/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}/qa-entries",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/qa-entries",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}/qa-entries/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string",
+        "query:expected_version:integer"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/knowledge-bases/{base_id}/qa-entries/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}/rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}/rules/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string",
+        "query:expected_version:integer"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/knowledge-bases/{base_id}/rules/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}/sources",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/sources",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}/sources/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string",
+        "query:expected_version:integer"
+      ],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/knowledge-bases/{base_id}/sources/{content_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "_register_content_routes",
+      "parameters": [
+        "path:base_id:string",
+        "path:content_id:string"
+      ],
+      "request_schemas": [
+        "body:KnowledgeMutationRequest"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6095
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/login",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "login_route",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 623
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/login",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "login",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 673
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/login-info-settings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "update_login_info_settings",
+      "parameters": [],
+      "request_schemas": [
+        "LoginInfoSettingUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4107
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/login-info-status",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_login_info_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4052
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/login.html",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "login_page",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 619
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/logout",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "logout",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 839
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/logs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6627
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/logs/clear",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "clear_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6742
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/logs/stats",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_log_stats",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6729
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/message-filters",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_message_filters",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3755
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/message-filters",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_message_filter",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3776
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/message-filters/{filter_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_message_filter",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3884
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/message-filters/{filter_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_message_filter",
+      "parameters": [],
+      "request_schemas": [
+        "MessageFilterUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3833
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/message-filters/{filter_id}/toggle",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "toggle_message_filter",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3865
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/message-filters/batch-create",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "batch_create_message_filters",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3800
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/message-filters/batch-delete",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "batch_delete_message_filters",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3894
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/message-notifications",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_all_message_notifications",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3662
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/message-notifications/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_account_notifications",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3674
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/message-notifications/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "set_message_notification",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3693
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/message-notifications/{notification_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_message_notification",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3737
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/message-notifications/account/{cid}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_account_notifications",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3721
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notification-channels",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_notification_channels",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3564
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/notification-channels",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_notification_channel",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3575
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/notification-channels/{channel_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_notification_channel",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3644
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notification-channels/{channel_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_notification_channel",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3597
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/notification-channels/{channel_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_notification_channel",
+      "parameters": [],
+      "request_schemas": [
+        "NotificationChannelUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3612
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/password-login",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "password_login",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2605
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/password-login/check/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "check_password_login_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2676
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/product-automation/delete-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_product_delete_rules",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5441
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/delete-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_product_delete_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5451
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/product-automation/delete-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_product_delete_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5484
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/product-automation/delete-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_product_delete_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5467
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/delete-rules/{rule_id}/preview",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "preview_product_delete_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5497
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/product-automation/filter-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_product_filter_rules",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5369
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/filter-rules",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_product_filter_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5379
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/product-automation/filter-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_product_filter_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5412
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/product-automation/filter-rules/{rule_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_product_filter_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5395
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/filter-rules/{rule_id}/run",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "run_product_filter_rule",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5425
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/product-automation/materials",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_product_materials",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5325
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/product-automation/materials/{material_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_product_material",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5356
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/product-automation/materials/{material_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_product_material",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5339
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/repairs/cards",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "compensate_product_cards",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5544
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/repairs/published-ids",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "repair_product_published_ids",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5524
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/product-automation/repairs/short-links",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "repair_product_short_links",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5534
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/product-automation/runs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_product_automation_runs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5513
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/qr-login/check/{session_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "check_qr_code_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2923
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/qr-login/cooldown-status/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_qr_cookie_refresh_cooldown_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3363
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/qr-login/generate",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "generate_qr_code",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 2903
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/qr-login/refresh-cookies",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "refresh_cookies_from_qr_login",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3260
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/qr-login/reset-cooldown/{cookie_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "reset_qr_cookie_refresh_cooldown",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3321
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/quick-phrases",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "list_quick_phrases",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9330
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/quick-phrases",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "create_quick_phrase",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9340
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/quick-phrases/{phrase_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_quick_phrase",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9383
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/quick-phrases/{phrase_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_quick_phrase",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9362
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/quick-phrases/{phrase_id}/use",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "use_quick_phrase",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 9396
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/register",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "register_route",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 660
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/register",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "register",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1238
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/register.html",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "register_page",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 629
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/registration-settings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "update_registration_settings",
+      "parameters": [],
+      "request_schemas": [
+        "RegistrationSettingUpdate"
+      ],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4081
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/registration-status",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_registration_status",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4025
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/risk-control-logs",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_risk_control_logs",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6644
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/risk-control-logs/{log_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_risk_control_log",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6702
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/send-message",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "send_message_api",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [
+        "SendMessageResponse"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1641
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/send-verification-code",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "send_verification_code",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1171
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system-settings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "get_system_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3988
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system-settings/{key}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "update_system_setting",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4002
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system-settings/public",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "get_public_system_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 3959
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/reload-cache",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "admin",
+      "owner_hint": "current_admin",
+      "handler": "reload_cache",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 5621
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/upload-image",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "upload_image",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 4830
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/user-settings",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_user_settings",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6945
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/user-settings/{key}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_user_setting",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6980
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/user-settings/{key}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "update_user_setting",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6956
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/verify",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "optional_authenticated",
+      "owner_hint": "current_user_or_anonymous",
+      "handler": "verify",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 826
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/verify-captcha",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "verify_captcha",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 971
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/xianyu/reply",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "unknown",
+      "owner_hint": "unknown",
+      "handler": "xianyu_reply",
+      "parameters": [],
+      "request_schemas": [
+        "RequestModel"
+      ],
+      "response_schemas": [
+        "ResponseModel"
+      ],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 1736
+        }
+      ]
+    }
+  ]
+}
