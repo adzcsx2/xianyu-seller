@@ -18,6 +18,10 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 from utils import browser_limit
+from utils.mtop_browser_fingerprint import (
+    build_mtop_request_headers,
+    get_playwright_context_options,
+)
 
 LOGIN_URL = "https://www.goofish.com/"
 
@@ -106,18 +110,7 @@ async def _fetch_live_verification_url(cookie_id: str, cookies_str: str) -> Opti
         )
         params["sign"] = generate_sign(params["t"], token, data_val)
 
-        headers = {
-            "accept": "application/json",
-            "content-type": "application/x-www-form-urlencoded",
-            "user-agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/139.0.0.0 Safari/537.36"
-            ),
-            "referer": "https://www.goofish.com/",
-            "origin": "https://www.goofish.com",
-            "cookie": cookies_str,
-        }
+        headers = build_mtop_request_headers(cookies_str)
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -160,7 +153,7 @@ async def open_manual_session(
         ``{"success": bool, "cookies_str": str, "message": str, "session_id": str}``。
         成功时 ``cookies_str`` 是完成验证后的新 Cookie，调用方应保存。
     """
-    from playwright.async_api import async_playwright
+    from patchright.async_api import async_playwright
 
     from utils.captcha_remote_control import captcha_controller
 
@@ -195,11 +188,7 @@ async def open_manual_session(
         )
         context = await browser.new_context(
             viewport={"width": 1280, "height": 800},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/138.0.0.0 Safari/537.36"
-            ),
+            **get_playwright_context_options(),
         )
 
         if cookies_str:
@@ -312,8 +301,6 @@ async def _wait_for_captcha_present(page, timeout: int = CAPTCHA_PRESENT_TIMEOUT
     check_completion 误判完成。这里显式等滑块出现，避免把“没弹出滑块”
     当成“已完成”。
     """
-    from playwright.async_api import TimeoutError as PlaywrightTimeoutError  # noqa: F401
-
     # 与 captcha_remote_control.check_completion 用同一组选择器，保证判断一致
     selectors = [
         "#nocaptcha",

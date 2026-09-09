@@ -52,10 +52,6 @@ export interface AccountDetail {
   runtime_state?: 'running' | 'connecting' | 'need_relogin' | 'stopped' | 'cancelled' | 'failed';
   // AI设置
   ai_enabled?: boolean;
-  max_discount_percent?: number;
-  max_discount_amount?: number;
-  max_bargain_rounds?: number;
-  custom_prompts?: string;
 }
 
 // Orders
@@ -128,6 +124,7 @@ export interface Card {
   image_url?: string;
   // 通用配置
   delay_seconds?: number;
+  inventory_revision?: string;
   created_at: string;
   updated_at: string;
 }
@@ -538,13 +535,135 @@ export interface AIReplySettings {
   api_key_configured?: boolean;
   base_url: string;
   user_agent?: string;
-  max_discount_percent: number;
-  max_discount_amount?: number;
-  max_bargain_rounds: number;
   context_enabled: boolean;
   context_message_limit: number;
   context_expire_minutes: number;
-  custom_prompts: string;
+}
+
+export interface KnowledgeBaseSummary {
+  id: string;
+  base_key: string;
+  name: string;
+  description: string;
+  version: number;
+  enabled: boolean;
+  schema_version: number;
+  seed_version?: string | null;
+  checksum: string;
+  fact_count: number;
+  source_count: number;
+  rule_count: number;
+  qa_count: number;
+  binding_count: number;
+}
+
+export interface KnowledgeFact {
+  id: string;
+  knowledge_base_id: string;
+  fact_key: string;
+  category: string;
+  title: string;
+  content: string;
+  source_ids: string[];
+  priority: number;
+  enabled: boolean;
+}
+export interface KnowledgeSource {
+  id: string;
+  knowledge_base_id: string;
+  source_key: string;
+  title: string;
+  reference: string;
+  url: string;
+  notes: string;
+}
+export interface KnowledgeRule {
+  id: string;
+  knowledge_base_id: string;
+  rule_key: string;
+  name: string;
+  rule_type: string;
+  intent: string;
+  matchers: string[];
+  instruction: string;
+  response: string;
+  config_json: Record<string, unknown>;
+  source_ids: string[];
+  priority: number;
+  enabled: boolean;
+}
+export interface KnowledgeQAEntry {
+  id: string;
+  knowledge_base_id: string;
+  qa_key: string;
+  category: string;
+  questions: string[];
+  keywords: string[];
+  answer: string;
+  source_ids: string[];
+  priority: number;
+  enabled: boolean;
+}
+export interface KnowledgeBaseDetail extends KnowledgeBaseSummary {
+  facts: KnowledgeFact[];
+  sources: KnowledgeSource[];
+  rules: KnowledgeRule[];
+  qa_entries: KnowledgeQAEntry[];
+}
+export interface KnowledgeBinding {
+  cookie_id: string;
+  item_id: string;
+  knowledge_base_id: string;
+  sort_order: number;
+  base_key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  version: number;
+}
+export interface AIReplyStyle { reply_style: string; version: number }
+
+export interface KnowledgeBaseAnswer {
+  knowledge_base_id: string;
+  knowledge_base_name: string;
+  model_name: string;
+  answer: string;
+}
+
+export interface ProductKnowledgeEntry {
+  knowledge_key: string;
+  category: string;
+  question_patterns: string[];
+  keywords: string[];
+  answer: string;
+  priority: number;
+  enabled: boolean;
+}
+
+export interface ProductKnowledgeDocument {
+  cookie_id: string;
+  item_id: string;
+  product_key: string;
+  display_name: string;
+  version: number;
+  seed_version?: string | null;
+  checksum: string;
+  entry_count: number;
+  entries: ProductKnowledgeEntry[];
+}
+
+export interface KnowledgePreviewMatch {
+  knowledge_key: string;
+  category: string;
+  score: number;
+}
+
+export interface KnowledgePreviewResult {
+  policy_intent: 'public' | 'safety' | 'commercial_sensitive' | string;
+  fixed_reply?: string | null;
+  matches: KnowledgePreviewMatch[];
+  match_count: number;
+  used_characters: number;
 }
 
 // Default Reply

@@ -13,6 +13,7 @@ const CardList = lazy(() => import('./components/CardList'));
 const ItemList = lazy(() => import('./components/ItemList'));
 const ProductAutomation = lazy(() => import('./components/ProductAutomation'));
 const AIReply = lazy(() => import('./components/AIReply'));
+const KnowledgeBase = lazy(() => import('./components/KnowledgeBase'));
 const Settings = lazy(() => import('./components/Settings'));
 const Keywords = lazy(() => import('./components/Keywords'));
 const MessageManagement = lazy(() => import('./components/MessageManagement'));
@@ -37,6 +38,7 @@ const pageLabels: Record<string, string> = {
   messages: '消息中心',
   'auto-reply': '自动回复',
   'ai-reply': 'AI 回复',
+  'knowledge-base': '知识库',
   'product-automation': '商品自动化',
   notifications: '通知与日志',
   settings: '系统设置',
@@ -149,26 +151,47 @@ const App: React.FC = () => {
     }
   };
 
-  // Check auth on mount
+  // Check auth on mount. An empty login request only creates a session when the
+  // backend has disabled admin login validation; otherwise the login form remains.
   useEffect(() => {
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-          verifyToken()
-            .then(result => {
-              if (!result.authenticated) {
-                localStorage.removeItem('auth_token');
-                return;
-              }
+      const establishSession = async () => {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          try {
+            const result = await verifyToken();
+            if (result.authenticated) {
               setIsAdmin(Boolean(result.is_admin));
               setIsLoggedIn(true);
-            })
-            .catch(() => localStorage.removeItem('auth_token'))
-            .finally(() => setCheckingAuth(false));
-      } else {
-          setCheckingAuth(false);
-      }
+              return;
+            }
+          } catch {
+            // Continue with environment-backed automatic login below.
+          }
+          localStorage.removeItem('auth_token');
+        }
+
+        const result = await login({});
+        if (!result.success || !result.token) {
+          setIsLoggedIn(false);
+          return;
+        }
+
+        localStorage.setItem('auth_token', result.token);
+        setIsAdmin(Boolean(result.is_admin));
+        setIsLoggedIn(true);
+      };
+
+      establishSession()
+        .catch(error => {
+          localStorage.removeItem('auth_token');
+          setLoginError(error instanceof Error ? error.message : '自动登录失败');
+        })
+        .finally(() => setCheckingAuth(false));
       
-      const handleLogout = () => setIsLoggedIn(false);
+      const handleLogout = () => {
+        localStorage.removeItem('auth_token');
+        window.location.reload();
+      };
       window.addEventListener('auth:logout', handleLogout);
       return () => window.removeEventListener('auth:logout', handleLogout);
   }, []);
@@ -470,8 +493,7 @@ const App: React.FC = () => {
         onMobileClose={() => setMobileMenuOpen(false)}
         onLogout={() => {
             localStorage.removeItem('auth_token');
-            setIsAdmin(false);
-            setIsLoggedIn(false);
+            window.location.reload();
         }} 
       />
       
@@ -521,6 +543,9 @@ const App: React.FC = () => {
           </section>
           <section hidden={activeTab !== 'ai-reply'}>
             <Suspense fallback={activeTab === 'ai-reply' ? <PageLoader /> : null}><AIReply /></Suspense>
+          </section>
+          <section hidden={activeTab !== 'knowledge-base'}>
+            <Suspense fallback={activeTab === 'knowledge-base' ? <PageLoader /> : null}><KnowledgeBase /></Suspense>
           </section>
           <section hidden={activeTab !== 'messages'} className="h-full min-h-0">
             <Suspense fallback={activeTab === 'messages' ? <PageLoader /> : null}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   BellRing,
+  BookOpen,
   Bot,
   Box,
   CreditCard,
@@ -50,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
         { id: 'messages', icon: ListFilter, label: '消息中心' },
         { id: 'auto-reply', icon: MessageSquare, label: '自动回复' },
         { id: 'ai-reply', icon: Bot, label: 'AI 回复' },
+        { id: 'knowledge-base', icon: BookOpen, label: '知识库' },
       ],
     },
     {

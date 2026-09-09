@@ -28,13 +28,15 @@ class FileLogCollector:
     
     def setup_file_monitoring(self):
         """设置文件监控"""
+        # 所有日志必须位于项目 logs 目录，避免运行时文件散落在仓库根目录。
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+
         # 查找日志文件
         possible_files = [
-            "xianyu.log",
-            "app.log", 
-            "system.log",
             "logs/xianyu.log",
-            "logs/app.log"
+            "logs/app.log",
+            "logs/system.log",
         ]
         
         for file_path in possible_files:
@@ -44,7 +46,7 @@ class FileLogCollector:
         
         if not self.log_file:
             # 如果没有找到现有文件，创建一个新的
-            self.log_file = "realtime.log"
+            self.log_file = os.path.join(log_dir, "realtime.log")
             
         # 设置loguru输出到文件
         self.setup_loguru_file_output()

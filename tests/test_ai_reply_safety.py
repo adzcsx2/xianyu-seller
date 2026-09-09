@@ -18,8 +18,9 @@
 """
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import app.ai_reply_engine as ai_reply_module
 from app.ai_reply_engine import AIReplyEngine, ReasoningBudgetExhausted
 
 
@@ -213,6 +214,60 @@ class BudgetEscalationTests(unittest.TestCase):
         slept.assert_not_called()
 
 
+class ModelOutputPolicyTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = AIReplyEngine()
+        self.settings = {
+            "ai_enabled": True,
+            "model_name": "test-model",
+            "api_key": "secret",
+            "base_url": "https://example.invalid/v1",
+            "max_discount_percent": 10,
+            "max_discount_amount": 100,
+            "max_bargain_rounds": 3,
+            "context_enabled": False,
+            "custom_prompts": "",
+        }
+
+    def test_model_cannot_inject_unasked_safety_topic(self):
+        runtime = Mock()
+        runtime.match.return_value = {
+            "snapshot": {
+                "facts": [],
+                "qa_entries": [],
+                "rules": [{
+                    "rule_type": "output_guard",
+                    "matchers": ["安全", "封号"],
+                    "config_json": {
+                        "forbidden_unless_asked": ["安全", "封号"],
+                        "fallback_mode": "human_confirmation",
+                    },
+                }],
+            },
+            "matches": [],
+            "fixed_reply": None,
+        }
+        runtime.build_context.return_value = "<public_product_knowledge>\n</public_product_knowledge>"
+        runtime.build_instruction_context.return_value = ""
+        with (
+            patch.object(ai_reply_module, "KnowledgeRuntimeService", return_value=runtime),
+            patch.object(self.engine, "is_ai_enabled", return_value=True),
+            patch.object(self.engine, "detect_intent", return_value="tech"),
+            patch.object(self.engine, "save_conversation", side_effect=["t1", "t2"]),
+            patch.object(self.engine, "_get_recent_user_messages", return_value=[]),
+            patch.object(self.engine, "get_bargain_count", return_value=0),
+            patch.object(self.engine, "_generate_with_retry", return_value="安装简单，而且绝对安全。"),
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=self.settings),
+        ):
+            reply = self.engine.generate_reply(
+                "怎么安装？", {"title": "Passistant", "price": "9.9", "desc": ""},
+                "chat-output-policy", "account-1", "buyer-1", "item-1", True,
+            )
+
+        self.assertEqual(reply, "这个问题需要人工确认后回复。")
+        self.assertNotIn("安全", reply)
+
+
 if __name__ == '__main__':
     unittest.main()
 
@@ -223,6 +278,13 @@ class PriceFloorTests(unittest.TestCase):
 
     ITEM = {'title': '塑形裤', 'price': '196', 'desc': ''}
     SETTINGS = {'max_discount_percent': 10, 'max_discount_amount': 100}
+
+    def test_bound_bargain_rounds_use_strictest_rule(self):
+        rules = [
+            {"rule_type": "bargain_policy", "config_json": {"max_rounds": 5}},
+            {"rule_type": "bargain_policy", "config_json": {"max_rounds": 2}},
+        ]
+        self.assertEqual(AIReplyEngine._resolve_bound_max_bargain_rounds(rules), 2)
 
     def test_floor_takes_the_stricter_of_two_limits(self):
         """百分比 10% 只让 19.6 元，固定额度 100 元会让到 96 元，应取更严的。"""
@@ -272,3 +334,21 @@ class PriceFloorTests(unittest.TestCase):
         floor = AIReplyEngine._resolve_price_floor(self.ITEM, self.SETTINGS)
         for reply in ('178包邮成交～', '180元包邮，最低啦', '196元包邮～'):
             self.assertGreaterEqual(AIReplyEngine._lowest_price_in(reply), floor, reply)
+
+    def test_unrelated_low_price_item_still_uses_configured_discount(self):
+        floor = AIReplyEngine._resolve_price_floor(
+            {'price': '¥5.00'},
+            {'max_discount_percent': 10, 'max_discount_amount': 100},
+            protect_current_price=False,
+        )
+        self.assertEqual(floor, 4.5)
+
+    def test_passistant_activity_cannot_be_discounted_and_ignores_discount_ratio(self):
+        floor = AIReplyEngine._resolve_price_floor(
+            {'price': '¥9.90'},
+            {'max_discount_percent': 10, 'max_discount_amount': 100},
+            protect_current_price=True,
+        )
+        self.assertEqual(floor, 9.9)
+        self.assertEqual(AIReplyEngine._lowest_price_in('原价29.9，活动3折，现价9.9元', include_small=True), 9.9)
+        self.assertEqual(AIReplyEngine._lowest_price_in('现在给你8.9元', include_small=True), 8.9)

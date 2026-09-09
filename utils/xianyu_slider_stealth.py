@@ -4263,7 +4263,9 @@ class XianyuSliderStealth:
 
         用 user_data_dir 精确匹配，避免误杀用户自己开的浏览器或其他账号的实例。
         """
-        marker = f"browser_data{os.sep}slider_{self.pure_user_id}"
+        # Chrome/Playwright 的命令行可能同时出现 Windows 反斜杠和 URL 风格
+        # 正斜杠；统一后再匹配，仍只命中当前账号的完整 profile 目录标记。
+        marker = f"browser_data/slider_{self.pure_user_id}"
         killed = 0
 
         try:
@@ -4274,7 +4276,7 @@ class XianyuSliderStealth:
         if psutil is not None:
             for proc in psutil.process_iter(['pid', 'cmdline']):
                 try:
-                    cmdline = ' '.join(proc.info.get('cmdline') or [])
+                    cmdline = ' '.join(proc.info.get('cmdline') or []).replace('\\', '/')
                     if marker in cmdline:
                         proc.kill()
                         killed += 1

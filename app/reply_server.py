@@ -2,8 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Bod
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
-from typing import List, Tuple, Optional, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, StrictBool, StrictInt, StringConstraints
+from typing import Annotated, List, Tuple, Optional, Dict, Any
 from pathlib import Path
 import secrets
 import time
@@ -14,15 +14,32 @@ import pandas as pd
 import io
 import asyncio
 import sqlite3
+import uuid
 from collections import defaultdict, OrderedDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 from app import cookie_manager
 from app.db_manager import db_manager
+from app.db_manager import (
+    GLOBAL_REPLY_STYLE_FORBIDDEN_TERMS,
+    KnowledgeNotFound,
+    KnowledgeBaseKeyConflict,
+    KnowledgeBindingConflict,
+    KnowledgeSourceInUse,
+    MigrationPrecondition,
+    CardInventoryConflict,
+)
+from app.product_knowledge import (
+    COMMERCIAL_SENSITIVE_REPLY,
+    SAFETY_REPLY,
+    KnowledgeVersionConflict,
+    ProductKnowledgeService,
+)
 from app.product_automation import ProductAutomationService
 from app.file_log_collector import setup_file_logging, get_file_log_collector
 from app.ai_reply_engine import ai_reply_engine
+from app.knowledge_runtime import KnowledgeRuntimeService
 from app.routers.delivery_block import create_delivery_block_router
 from utils.qr_login import qr_login_manager
 from utils.xianyu_utils import trans_cookies
@@ -49,10 +66,15 @@ except ImportError:
 KEYWORDS_FILE = PROJECT_ROOT / "回复关键字.txt"
 
 # 简单的用户认证配置
-ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin123"  # 系统初始化时的默认密码
-SESSION_TOKENS = {}  # 存储会话token: {token: {'user_id': int, 'username': str, 'timestamp': float}}
-TOKEN_EXPIRE_TIME = 24 * 60 * 60  # token过期时间：24小时
+ADMIN_USERNAME = (os.getenv("ADMIN_USERNAME") or "admin").strip() or "admin"
+ADMIN_LOGIN_ENABLED = os.getenv("ADMIN_LOGIN_ENABLED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+DEFAULT_ADMIN_PASSWORD = "admin123"
+SESSION_TOKENS = {}  # 存储永久会话token；仅主动登出或服务进程重启时撤销
 
 # HTTP Bearer认证
 security = HTTPBearer(auto_error=False)
@@ -130,6 +152,155 @@ class LoginRequest(BaseModel):
     verification_code: Optional[str] = None
 
 
+KnowledgeKeyValue = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9._-]*$"),
+]
+KnowledgeQuestionPattern = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=80),
+]
+KnowledgeKeyword = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=32),
+]
+KnowledgeAnswer = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=800),
+]
+
+
+class ProductKnowledgeEntryPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    knowledge_key: KnowledgeKeyValue
+    category: str
+    question_patterns: List[KnowledgeQuestionPattern] = Field(default_factory=list, max_length=20)
+    keywords: List[KnowledgeKeyword] = Field(default_factory=list, max_length=30)
+    answer: KnowledgeAnswer
+    priority: StrictInt = Field(default=0, ge=-100, le=100)
+    enabled: StrictBool = True
+
+
+class ProductKnowledgePutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(ge=0)
+    entries: List[ProductKnowledgeEntryPayload] = Field(default_factory=list, max_length=200)
+
+
+class ProductKnowledgeImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(ge=0)
+
+
+class ProductKnowledgePreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=1, max_length=500)
+
+
+class AIReplyTestRequest(BaseModel):
+    """AI 测试只接受真实商品 ID，禁止客户端注入任意商品事实。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(default="你好", min_length=1, max_length=500)
+    item_id: str = Field(min_length=1, max_length=128)
+
+
+class ProductKnowledgeEntryResponse(BaseModel):
+    knowledge_key: str
+    category: str
+    question_patterns: List[str]
+    keywords: List[str]
+    answer: str
+    priority: int
+    enabled: bool
+
+
+class ProductKnowledgeResponse(BaseModel):
+    cookie_id: str
+    item_id: str
+    product_key: str
+    display_name: str
+    version: int
+    seed_version: Optional[str] = None
+    checksum: str = ''
+    entry_count: int
+    entries: List[ProductKnowledgeEntryResponse]
+
+
+class ProductKnowledgeImportResponse(BaseModel):
+    cookie_id: str
+    item_id: str
+    product_key: str
+    display_name: str
+    version: int
+    entry_count: int
+    seed_version: str
+    checksum: str
+
+
+class ProductKnowledgePreviewMatch(BaseModel):
+    knowledge_key: str
+    category: str
+    score: int
+
+
+class ProductKnowledgePreviewResponse(BaseModel):
+    policy_intent: str
+    fixed_reply: Optional[str] = None
+    matches: List[ProductKnowledgePreviewMatch]
+    match_count: int
+    used_characters: int
+
+
+class KnowledgeBaseCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=500)
+
+
+class KnowledgeBaseUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: StrictInt = Field(ge=1)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    description: Optional[str] = Field(default=None, max_length=500)
+    enabled: Optional[StrictBool] = None
+
+
+class KnowledgeMutationRequest(BaseModel):
+    """单资源 CRUD 请求；字段按资源类型由领域层进一步校验。"""
+    model_config = ConfigDict(extra="allow")
+    expected_version: StrictInt = Field(ge=1)
+
+
+class KnowledgeBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    knowledge_base_id: str = Field(min_length=1, max_length=128)
+
+
+class AIReplyStyleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: StrictInt = Field(ge=1)
+    reply_style: str = Field(min_length=1, max_length=1000)
+
+
+class KnowledgeBaseAskRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cookie_id: str = Field(min_length=1, max_length=128)
+    question: str = Field(min_length=1, max_length=500)
+
+
+class KnowledgeBaseAskResponse(BaseModel):
+    knowledge_base_id: str
+    knowledge_base_name: str
+    model_name: str
+    answer: str
+
+
 class LoginResponse(BaseModel):
     success: bool
     token: Optional[str] = None
@@ -203,14 +374,7 @@ def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(s
     if token not in SESSION_TOKENS:
         return None
 
-    token_data = SESSION_TOKENS[token]
-
-    # 检查token是否过期
-    if time.time() - token_data['timestamp'] > TOKEN_EXPIRE_TIME:
-        del SESSION_TOKENS[token]
-        return None
-
-    return token_data
+    return SESSION_TOKENS[token]
 
 
 def verify_admin_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
@@ -252,7 +416,7 @@ def get_user_log_prefix(user_info: Dict[str, Any] = None) -> str:
 
 def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """要求管理员权限"""
-    if current_user['username'] != 'admin':
+    if current_user['username'] != ADMIN_USERNAME:
         raise HTTPException(status_code=403, detail="需要管理员权限")
     return current_user
 
@@ -431,13 +595,21 @@ async def health_check():
 
 # 服务 React 前端 SPA - 所有前端路由都返回 index.html
 async def serve_frontend():
-    """服务 React 前端 SPA"""
+    """服务 React 前端 SPA，并强制浏览器校验最新入口文件。"""
+    headers = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+    }
     index_path = os.path.join(static_dir, 'index.html')
     if os.path.exists(index_path):
         with open(index_path, 'r', encoding='utf-8') as f:
-            return HTMLResponse(f.read())
+            return HTMLResponse(f.read(), headers=headers)
     else:
-        return HTMLResponse('<h3>Frontend not found. Please build the frontend first.</h3>')
+        return HTMLResponse(
+            '<h3>Frontend not found. Please build the frontend first.</h3>',
+            headers=headers,
+        )
 
 @app.get('/', response_class=HTMLResponse)
 async def root():
@@ -502,6 +674,35 @@ async def register_route():
 @app.post('/login')
 async def login(request: LoginRequest):
     from app.db_manager import db_manager
+
+    has_credentials = any(
+        (request.username, request.password, request.email, request.verification_code)
+    )
+
+    # 关闭管理员登录验证时，空请求直接为环境变量指定的管理员创建会话。
+    # 浏览器不会接触 ADMIN_PASSWORD；Docker 重启后也能重新建立会话。
+    if not has_credentials and not ADMIN_LOGIN_ENABLED:
+        user = db_manager.get_user_by_username(ADMIN_USERNAME)
+        if not user or not user.get("is_active", True):
+            logger.error(f"【{ADMIN_USERNAME}】免登录失败：管理员不存在或已停用")
+            return LoginResponse(success=False, message="管理员不存在或已停用")
+
+        token = generate_token()
+        SESSION_TOKENS[token] = {
+            "user_id": user["id"],
+            "username": user["username"],
+            "is_admin": True,
+            "timestamp": time.time(),
+        }
+        logger.info(f"【{user['username']}#{user['id']}】免登录会话创建成功")
+        return LoginResponse(
+            success=True,
+            token=token,
+            message="免登录成功",
+            user_id=user["id"],
+            username=user["username"],
+            is_admin=True,
+        )
 
     # 判断登录方式
     if request.username and request.password:
@@ -650,14 +851,14 @@ async def change_admin_password(request: ChangePasswordRequest, admin_user: Dict
 
     try:
         # 验证当前密码（使用用户表验证）
-        if not db_manager.verify_user_password('admin', request.current_password):
+        if not db_manager.verify_user_password(ADMIN_USERNAME, request.current_password):
             return {"success": False, "message": "当前密码错误"}
 
         # 更新密码（使用用户表更新）
-        success = db_manager.update_user_password('admin', request.new_password)
+        success = db_manager.update_user_password(ADMIN_USERNAME, request.new_password)
 
         if success:
-            logger.info(f"【admin#{admin_user['user_id']}】管理员密码修改成功")
+            logger.info(f"【{ADMIN_USERNAME}#{admin_user['user_id']}】管理员密码修改成功")
             return {"success": True, "message": "密码修改成功"}
         else:
             return {"success": False, "message": "密码修改失败"}
@@ -709,13 +910,13 @@ async def check_default_password(current_user: Dict[str, Any] = Depends(get_curr
         logger.info(f"检查默认密码: username={username}, is_admin={is_admin}")
         
         # 只检查admin用户
-        if not is_admin or username != 'admin':
+        if not is_admin or username != ADMIN_USERNAME:
             logger.info(f"非admin用户，跳过检查")
             return {"using_default": False}
 
         # 检查是否使用默认密码
-        using_default = db_manager.verify_user_password('admin', DEFAULT_ADMIN_PASSWORD)
-        logger.info(f"默认密码检查结果: {using_default}, DEFAULT_ADMIN_PASSWORD={DEFAULT_ADMIN_PASSWORD}")
+        using_default = db_manager.verify_user_password(ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD)
+        logger.info(f"默认密码检查结果: {using_default}")
         
         return {"using_default": using_default}
 
@@ -2081,16 +2282,6 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
         # 导入 XianyuSliderStealth
         from utils.xianyu_slider_stealth import XianyuSliderStealth
         
-        # 创建 XianyuSliderStealth 实例
-        slider_instance = XianyuSliderStealth(
-            user_id=account_id,
-            enable_learning=True,
-            headless=not show_browser
-        )
-        
-        # 更新会话信息
-        password_login_sessions[session_id]['slider_instance'] = slider_instance
-        
         # 定义通知回调函数，用于检测到人脸认证时返回验证链接或截图（同步函数）
         def notification_callback(message: str, screenshot_path: str = None, verification_url: str = None, screenshot_path_new: str = None):
             """人脸认证通知回调（同步）
@@ -2238,7 +2429,16 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
         import threading
         
         def run_login():
+            slider_instance = None
+            session = password_login_sessions[session_id]
             try:
+                # 构造器会同步等待并发槽位，必须和登录、清理一起在线程中执行。
+                slider_instance = XianyuSliderStealth(
+                    user_id=account_id,
+                    enable_learning=True,
+                    headless=not show_browser,
+                )
+                session['slider_instance'] = slider_instance
                 cookies_dict = slider_instance.login_with_password_playwright(
                     account=account,
                     password=password,
@@ -2385,15 +2585,15 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
             finally:
                 # 清理实例（释放并发槽位）
                 try:
-                    from utils.xianyu_slider_stealth import concurrency_manager
-                    concurrency_manager.unregister_instance(account_id)
-                    log_with_user('debug', f"已释放并发槽位: {account_id}", current_user)
+                    if slider_instance is not None:
+                        slider_instance.close_browser()
                 except Exception as cleanup_e:
                     log_with_user('warning', f"清理实例时出错: {str(cleanup_e)}", current_user)
+                finally:
+                    session['slider_instance'] = None
         
-        # 在后台线程中执行登录
-        login_thread = threading.Thread(target=run_login, daemon=True)
-        login_thread.start()
+        # 保持后台任务存活至线程结束，等待期间 API 事件循环仍可响应轮询。
+        await asyncio.to_thread(run_login)
         
     except Exception as e:
         password_login_sessions[session_id]['status'] = 'failed'
@@ -2417,6 +2617,16 @@ async def password_login(
         
         if not account_id or not account or not password:
             return {'success': False, 'message': '账号ID、登录账号和密码不能为空'}
+
+        # 账号密码登录可以更新已有账号的 Cookie。已有账号必须属于当前用户；
+        # 不存在的 account_id 仍允许作为新账号登录，由后台任务负责创建记录。
+        account_details = db_manager.get_cookie_details(account_id)
+        if (
+            account_details
+            and account_details.get('user_id') != current_user['user_id']
+            and current_user.get('username') != ADMIN_USERNAME
+        ):
+            raise HTTPException(status_code=403, detail='无权限操作该账号')
         
         log_with_user('info', f"开始账号密码登录: {account_id}, 账号: {account}", current_user)
         
@@ -2455,6 +2665,8 @@ async def password_login(
             'message': '登录任务已启动，请等待...'
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         log_with_user('error', f"账号密码登录异常: {str(e)}", current_user)
         import traceback
@@ -2578,7 +2790,7 @@ async def get_account_face_verification_screenshot(
         username = current_user['username']
         
         # 如果是管理员，允许访问所有账号
-        is_admin = username == 'admin'
+        is_admin = username == ADMIN_USERNAME
         
         if not is_admin:
             cookie_info = db_manager.get_cookie_details(account_id)
@@ -4836,7 +5048,8 @@ def update_card(card_id: int, card_data: dict, current_user: Dict[str, Any] = De
             is_multi_spec=is_multi_spec,
             spec_name=card_data.get('spec_name'),
             spec_value=card_data.get('spec_value'),
-            user_id=current_user['user_id']
+            user_id=current_user['user_id'],
+            expected_inventory_revision=card_data.get('expected_inventory_revision'),
         )
         if success:
             return {"message": "卡券更新成功"}
@@ -4844,6 +5057,8 @@ def update_card(card_id: int, card_data: dict, current_user: Dict[str, Any] = De
             raise HTTPException(status_code=404, detail="卡券不存在")
     except HTTPException:
         raise
+    except CardInventoryConflict as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5794,6 +6009,322 @@ def get_items_by_cookie(cookie_id: str, current_user: Dict[str, Any] = Depends(g
         raise HTTPException(status_code=500, detail=f"获取商品信息失败: {str(e)}")
 
 
+def _require_product_knowledge_scope(
+    cookie_id: str,
+    item_id: str,
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    """统一执行知识 API 的账号与商品所有权校验。"""
+    user_cookies = db_manager.get_all_cookies(current_user['user_id'])
+    if cookie_id not in user_cookies:
+        raise HTTPException(status_code=403, detail="无权限访问该Cookie")
+    item = db_manager.get_item_info(cookie_id, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="商品不存在")
+    return item
+
+
+def _knowledge_http_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, KnowledgeNotFound):
+        return HTTPException(status_code=404, detail="知识库或内容不存在")
+    if isinstance(exc, (KnowledgeBaseKeyConflict, KnowledgeBindingConflict, KnowledgeSourceInUse)):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, KnowledgeVersionConflict):
+        return HTTPException(
+            status_code=409,
+            detail={"message": "知识版本已变化，请重新加载", "expected_version": exc.expected_version, "current_version": exc.current_version},
+        )
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=422, detail=str(exc))
+    return HTTPException(status_code=500, detail="知识库操作失败")
+
+
+@app.get("/knowledge-bases")
+def list_knowledge_bases(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {"knowledge_bases": db_manager.list_knowledge_bases()}
+
+
+@app.post("/knowledge-bases")
+def create_knowledge_base(request: KnowledgeBaseCreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        return db_manager.create_knowledge_base(request.name, request.description)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.get("/knowledge-bases/{base_id}")
+def get_knowledge_base(base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        return db_manager.get_knowledge_base(base_id)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.put("/knowledge-bases/{base_id}")
+def update_knowledge_base(base_id: str, request: KnowledgeBaseUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        values = request.model_dump(exclude_unset=True); values.pop("expected_version", None)
+        return db_manager.update_knowledge_base(base_id, values, expected_version=request.expected_version)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.delete("/knowledge-bases/{base_id}")
+def delete_knowledge_base(base_id: str, expected_version: int = Query(..., ge=1), current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        return db_manager.delete_knowledge_base(base_id, expected_version=expected_version)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+def _create_content(kind: str, base_id: str, request: KnowledgeMutationRequest):
+    values = request.model_dump(exclude_unset=True); version = values.pop("expected_version")
+    if kind == "qa_entries" and not str(values.get("qa_key") or "").strip():
+        values["qa_key"] = f"qa-{uuid.uuid4().hex[:12]}"
+    method = {"facts": db_manager.create_knowledge_fact, "sources": db_manager.create_knowledge_source, "rules": db_manager.create_knowledge_rule, "qa_entries": db_manager.create_knowledge_qa_entry}[kind]
+    return method(base_id, values, expected_version=version)
+
+
+def _update_content(kind: str, base_id: str, content_id: str, request: KnowledgeMutationRequest):
+    values = request.model_dump(exclude_unset=True); version = values.pop("expected_version")
+    method = {"facts": db_manager.update_knowledge_fact, "sources": db_manager.update_knowledge_source, "rules": db_manager.update_knowledge_rule, "qa_entries": db_manager.update_knowledge_qa_entry}[kind]
+    return method(base_id, content_id, values, expected_version=version)
+
+
+def _delete_content(kind: str, base_id: str, content_id: str, expected_version: int):
+    method = {"facts": db_manager.delete_knowledge_fact, "sources": db_manager.delete_knowledge_source, "rules": db_manager.delete_knowledge_rule, "qa_entries": db_manager.delete_knowledge_qa_entry}[kind]
+    return method(base_id, content_id, expected_version=expected_version)
+
+
+def _register_content_routes(kind: str, path_name: str):
+    @app.post(f"/knowledge-bases/{{base_id}}/{path_name}")
+    def create_content(base_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+        try: return _create_content(kind, base_id, request)
+        except Exception as exc: raise _knowledge_http_error(exc) from exc
+
+    @app.put(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
+    def update_content(base_id: str, content_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+        try: return _update_content(kind, base_id, content_id, request)
+        except Exception as exc: raise _knowledge_http_error(exc) from exc
+
+    @app.delete(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
+    def delete_content(base_id: str, content_id: str, expected_version: int = Query(..., ge=1), current_user: Dict[str, Any] = Depends(get_current_user)):
+        try: return _delete_content(kind, base_id, content_id, expected_version)
+        except Exception as exc: raise _knowledge_http_error(exc) from exc
+
+    @app.get(f"/knowledge-bases/{{base_id}}/{path_name}")
+    def list_content(base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+        try: return {path_name.replace("-", "_"): db_manager.list_knowledge_content(kind, base_id)}
+        except Exception as exc: raise _knowledge_http_error(exc) from exc
+
+
+for _kind, _path in (("facts", "facts"), ("sources", "sources"), ("rules", "rules"), ("qa_entries", "qa-entries")):
+    _register_content_routes(_kind, _path)
+
+
+@app.post("/knowledge-bases/{base_id}/ask", response_model=KnowledgeBaseAskResponse)
+async def ask_knowledge_base(
+    base_id: str,
+    request: KnowledgeBaseAskRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_cookies = db_manager.get_all_cookies(current_user["user_id"])
+    if request.cookie_id not in user_cookies:
+        raise HTTPException(status_code=403, detail="无权限使用该账号的 AI 配置")
+    try:
+        knowledge_base = db_manager.get_knowledge_base(base_id)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+    settings = db_manager.get_ai_reply_settings(request.cookie_id)
+    try:
+        answer = await asyncio.to_thread(
+            ai_reply_engine.answer_knowledge_base,
+            request.cookie_id,
+            knowledge_base,
+            request.question,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            f"知识库问答失败: base_id={base_id}, account={request.cookie_id}, "
+            f"error={type(exc).__name__}"
+        )
+        raise HTTPException(status_code=502, detail="AI 服务调用失败，请检查当前账号的模型配置") from exc
+    return {
+        "knowledge_base_id": knowledge_base["id"],
+        "knowledge_base_name": knowledge_base["name"],
+        "model_name": str(settings.get("model_name") or ""),
+        "answer": answer,
+    }
+
+
+@app.get("/items/{cookie_id}/{item_id}/knowledge-bindings")
+def list_item_knowledge_bindings(cookie_id: str, item_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_product_knowledge_scope(cookie_id, item_id, current_user)
+    return {"bindings": db_manager.list_item_knowledge_bindings(cookie_id, item_id)}
+
+
+@app.post("/items/{cookie_id}/{item_id}/knowledge-bindings")
+def add_item_knowledge_binding(cookie_id: str, item_id: str, request: KnowledgeBindingRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_product_knowledge_scope(cookie_id, item_id, current_user)
+    try: return db_manager.add_item_knowledge_binding(cookie_id, item_id, request.knowledge_base_id)
+    except Exception as exc: raise _knowledge_http_error(exc) from exc
+
+
+@app.delete("/items/{cookie_id}/{item_id}/knowledge-bindings/{base_id}")
+def remove_item_knowledge_binding(cookie_id: str, item_id: str, base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_product_knowledge_scope(cookie_id, item_id, current_user)
+    if not db_manager.delete_item_knowledge_binding(cookie_id, item_id, base_id):
+        raise HTTPException(status_code=404, detail="商品未绑定该知识库")
+    return {"deleted": True, "knowledge_base_id": base_id}
+
+
+@app.post("/items/{cookie_id}/{item_id}/knowledge-preview")
+def preview_knowledge_binding(cookie_id: str, item_id: str, request: ProductKnowledgePreviewRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_product_knowledge_scope(cookie_id, item_id, current_user)
+    result = KnowledgeRuntimeService(db_manager).match(cookie_id, item_id, request.message)
+    matches = []
+    for match in result["matches"]:
+        key = match.get("qa_key") or match.get("fact_key") or ""
+        matches.append({"knowledge_key": key, "category": match.get("category", "product"), "score": int(match.get("score", 0))})
+    fixed_rule = next((r for r in result["snapshot"].get("rules", []) if r.get("response") == result.get("fixed_reply")), None)
+    return {"policy_intent": fixed_rule.get("intent", "public") if fixed_rule else "public", "fixed_reply": result.get("fixed_reply"), "matches": matches, "match_count": len(matches), "used_characters": sum(len(m.get("answer") or m.get("content", "")) for m in result["matches"])}
+
+
+@app.get("/ai-reply-style")
+def get_ai_reply_style(current_user: Dict[str, Any] = Depends(get_current_user)):
+    profile = db_manager.get_ai_reply_profile()
+    return {"reply_style": profile["reply_style"], "version": profile["version"]}
+
+
+@app.put("/ai-reply-style")
+def update_ai_reply_style(request: AIReplyStyleRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    lowered = request.reply_style.lower()
+    if any(term in lowered for term in GLOBAL_REPLY_STYLE_FORBIDDEN_TERMS) or request.reply_style.lstrip().startswith(("{", "[")):
+        raise HTTPException(status_code=422, detail="回复风格只能描述语气、篇幅和表达习惯")
+    try:
+        profile = db_manager.update_ai_reply_profile(request.reply_style, expected_version=request.expected_version)
+        return {"reply_style": profile["reply_style"], "version": profile["version"]}
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+def _public_product_knowledge_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """管理 API 也不返回 source_refs、内部 scope 和数据库 id。"""
+    return {
+        'knowledge_key': entry['knowledge_key'],
+        'category': entry['category'],
+        'question_patterns': list(entry.get('question_patterns', [])),
+        'keywords': list(entry.get('keywords', [])),
+        'answer': entry['answer'],
+        'priority': int(entry.get('priority', 0)),
+        'enabled': bool(entry.get('enabled', True)),
+    }
+
+
+def _product_knowledge_response(cookie_id: str, item_id: str) -> Dict[str, Any]:
+    document = db_manager.get_product_knowledge_document(cookie_id, item_id)
+    entries = db_manager.list_product_knowledge_entries(cookie_id, item_id, include_disabled=True)
+    return {
+        **document,
+        'entry_count': len(entries),
+        'entries': [_public_product_knowledge_entry(entry) for entry in entries],
+    }
+
+
+def _legacy_global_knowledge_response(cookie_id: str, item_id: str) -> Dict[str, Any]:
+    """把商品绑定的全局库投影为旧前端可读取的公开问答文档。
+
+    已经打开的单页应用可能在后端升级后继续运行旧 JS。保留这个只读投影，
+    可以避免旧页面因 410 将知识区域渲染为空白；来源、内部规则等仍只通过
+    新版全局知识库界面管理。
+    """
+    bindings = db_manager.list_item_knowledge_bindings(cookie_id, item_id)
+    if not bindings:
+        return {
+            'cookie_id': cookie_id,
+            'item_id': item_id,
+            'product_key': 'unbound',
+            'display_name': '未绑定知识库',
+            'version': 0,
+            'seed_version': None,
+            'checksum': '',
+            'entry_count': 0,
+            'entries': [],
+        }
+
+    bases = [db_manager.get_knowledge_base(binding['knowledge_base_id']) for binding in bindings]
+    entries = []
+    for base in bases:
+        for entry in base.get('qa_entries', []):
+            entries.append({
+                'knowledge_key': entry['qa_key'],
+                'category': entry['category'],
+                'question_patterns': list(entry.get('questions', [])),
+                'keywords': list(entry.get('keywords', [])),
+                'answer': entry['answer'],
+                'priority': int(entry.get('priority', 0)),
+                'enabled': bool(entry.get('enabled', True)),
+            })
+
+    single_base = len(bases) == 1
+    return {
+        'cookie_id': cookie_id,
+        'item_id': item_id,
+        'product_key': bases[0]['base_key'] if single_base else 'global-composite',
+        'display_name': bases[0]['name'] if single_base else '、'.join(base['name'] for base in bases),
+        'version': max(int(base['version']) for base in bases),
+        'seed_version': bases[0].get('seed_version') if single_base else None,
+        'checksum': bases[0].get('checksum', '') if single_base else '|'.join(base.get('checksum', '') for base in bases),
+        'entry_count': len(entries),
+        'entries': entries,
+    }
+
+
+@app.get("/items/{cookie_id}/{item_id}/ai-knowledge", response_model=ProductKnowledgeResponse)
+def get_product_knowledge(
+    cookie_id: str,
+    item_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_product_knowledge_scope(cookie_id, item_id, current_user)
+    try:
+        return _legacy_global_knowledge_response(cookie_id, item_id)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.put("/items/{cookie_id}/{item_id}/ai-knowledge", response_model=ProductKnowledgeResponse)
+def put_product_knowledge(
+    cookie_id: str,
+    item_id: str,
+    request: ProductKnowledgePutRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    raise HTTPException(status_code=410, detail="旧商品知识库接口已退役，请使用全局知识库内容接口")
+
+
+@app.post("/items/{cookie_id}/{item_id}/ai-knowledge/import-passistant", response_model=ProductKnowledgeImportResponse)
+def import_passistant_knowledge(
+    cookie_id: str,
+    item_id: str,
+    request: ProductKnowledgeImportRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    raise HTTPException(status_code=410, detail="旧商品知识库导入接口已退役，请使用全局知识库迁移")
+
+
+@app.post("/items/{cookie_id}/{item_id}/ai-knowledge/preview", response_model=ProductKnowledgePreviewResponse)
+def preview_product_knowledge(
+    cookie_id: str,
+    item_id: str,
+    request: ProductKnowledgePreviewRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    raise HTTPException(status_code=410, detail="旧商品知识库预览接口已退役，请使用 /knowledge-preview")
+
+
 @app.get("/items/{cookie_id}/{item_id}")
 def get_item_detail(cookie_id: str, item_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     """获取商品详情"""
@@ -5881,23 +6412,24 @@ class BatchDeleteRequest(BaseModel):
 
 
 class AIReplySettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     ai_enabled: bool
     model_name: str = "qwen-plus"
     api_key: str = ""
     base_url: str = "https://ai.corleom.com/v1"
     user_agent: str = ""
-    max_discount_percent: int = 10
-    max_discount_amount: int = 100
-    max_bargain_rounds: int = 3
     context_enabled: bool = True
     context_message_limit: int = 12
     context_expire_minutes: int = 120
-    custom_prompts: str = ""
 
 
 def _public_ai_reply_settings(settings: dict) -> dict:
     """返回前端可展示的AI配置，不暴露密钥。"""
     public_settings = dict(settings)
+    # 折扣/议价和 custom_prompts 已迁入商品绑定知识库；保留数据库列仅为
+    # 兼容旧回滚，不再通过账号 API 暴露或写回，避免覆盖全局风格。
+    for legacy in ("max_discount_percent", "max_discount_amount", "max_bargain_rounds", "custom_prompts"):
+        public_settings.pop(legacy, None)
     public_settings['api_key_configured'] = bool(public_settings.get('api_key'))
     public_settings['api_key'] = ''
     return public_settings
@@ -6023,9 +6555,10 @@ def get_all_ai_reply_settings(current_user: Dict[str, Any] = Depends(get_current
 
 
 @app.post("/ai-reply-test/{cookie_id}")
-async def test_ai_reply(cookie_id: str, test_data: dict,
+async def test_ai_reply(cookie_id: str, test_data: AIReplyTestRequest,
                         current_user: Dict[str, Any] = Depends(get_current_user)):
-    """测试AI回复功能"""
+    """使用当前账号拥有的真实商品测试 AI 回复。"""
+    test_chat_id = f"__ai_test__{uuid.uuid4().hex}"
     try:
         # 检查账号是否存在
         if cookie_manager.manager is None:
@@ -6049,22 +6582,27 @@ async def test_ai_reply(cookie_id: str, test_data: dict,
         if not settings.get('base_url'):
             raise HTTPException(status_code=400, detail='未配置API地址，请先在AI设置中配置API地址')
 
-        # 构造测试数据
-        test_message = test_data.get('message', '你好')
+        # 商品事实必须来自当前用户的 item_info，不能由前端传入任意标题/价格/描述。
+        item_id = test_data.item_id
+        stored_item = db_manager.get_item_info(cookie_id, item_id)
+        if not stored_item:
+            raise HTTPException(status_code=404, detail='商品不存在或不属于该账号')
+
+        test_message = test_data.message
         test_item_info = {
-            'title': test_data.get('item_title', '测试商品'),
-            'price': test_data.get('item_price', 100),
-            'desc': test_data.get('item_desc', '这是一个测试商品')
+            'title': stored_item.get('item_title', ''),
+            'price': stored_item.get('item_price', ''),
+            'desc': stored_item.get('item_description', ''),
         }
 
         # 生成测试回复（跳过等待时间）
         reply = await ai_reply_engine.generate_reply_async(
             message=test_message,
             item_info=test_item_info,
-            chat_id=f"test_{int(time.time())}",
+            chat_id=test_chat_id,
             cookie_id=cookie_id,
-            user_id="test_user",
-            item_id="test_item",
+            user_id=str(current_user.get('user_id', 'test_user')),
+            item_id=item_id,
             skip_wait=True  # 测试时跳过10秒等待
         )
 
@@ -6080,6 +6618,12 @@ async def test_ai_reply(cookie_id: str, test_data: dict,
         import traceback
         logger.error(f"详细错误: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+    finally:
+        # 测试会话使用 UUID 前缀并在结束后清理，不污染买家上下文。
+        try:
+            db_manager.delete_ai_conversation_chat(test_chat_id, cookie_id)
+        except Exception as cleanup_error:
+            logger.warning(f"清理 AI 测试会话失败: {type(cleanup_error).__name__}")
 
 
 # ==================== 日志管理API ====================
@@ -8615,10 +9159,10 @@ async def import_orders(
 
 # 定义后端 API 的一级路径。未匹配的 API 路径必须返回 JSON 404，不能回退到 SPA。
 API_ROOTS = {
-    'admin', 'ai-reply-settings', 'ai-reply-test', 'analytics', 'api', 'backup',
+    'admin', 'ai-reply-settings', 'ai-reply-style', 'ai-reply-test', 'analytics', 'api', 'backup',
     'cards', 'change-admin-password', 'change-password', 'cookie', 'cookies',
     'blacklist', 'debug', 'default-replies', 'delivery-block-rules', 'delivery-rules', 'face-verification',
-    'generate-captcha', 'geetest', 'health', 'item-reply', 'itemReplays', 'items',
+    'generate-captcha', 'geetest', 'health', 'knowledge-bases', 'item-reply', 'itemReplays', 'items',
     'item-delivery-configs',
     'keywords', 'keywords-export', 'keywords-import', 'keywords-with-item-id',
     'keywords-with-type', 'login', 'login-info-settings', 'login-info-status',
@@ -8863,6 +9407,17 @@ def use_quick_phrase(
     return {'success': db_manager.increment_quick_phrase_usage(phrase_id)}
 
 
+def should_allow_manual_captcha(account_state: Dict[str, Any]) -> bool:
+    """冷却计时结束后，有效的滑块事件仍应允许人工处理。"""
+    return bool(
+        account_state
+        and (
+            account_state.get('blocked')
+            or account_state.get('verification_type') == 'slider'
+        )
+    )
+
+
 @app.post('/api/captcha/manual-session')
 async def start_manual_captcha(
     cookie_id: str = Form(...),
@@ -8886,7 +9441,15 @@ async def start_manual_captcha(
         raise HTTPException(status_code=404, detail="账号不存在或无权访问")
 
     guard = risk_control.registry.get(cookie_id)
-    if not guard.is_blocked:
+    # 冷却倒计时结束不等于验证码已经通过。状态页会继续依据一小时内的最新
+    # slider 事件显示「人工验证」，后端也必须采用同一判定，否则按钮可点却
+    # 固定返回 409，只能等下一轮自动失败重新进入冷却。
+    status = get_risk_control_status(current_user)
+    account_state = next(
+        (item for item in status.get('accounts', []) if item.get('cookie_id') == cookie_id),
+        {'blocked': guard.is_blocked, 'verification_type': 'none'},
+    )
+    if not should_allow_manual_captcha(account_state):
         raise HTTPException(
             status_code=409,
             detail="该账号当前不处于风控状态，无需人工验证",

@@ -2,6 +2,7 @@ import asyncio
 import unittest
 from unittest.mock import Mock, patch
 
+import app.ai_reply_engine as ai_reply_module
 from app.ai_reply_engine import AIReplyEngine
 from app.reply_server import _public_ai_reply_settings
 
@@ -22,6 +23,173 @@ class AIReplyEngineTests(unittest.TestCase):
 
         self.assertEqual(reply, "你好， 现货可拍。")
         self.assertEqual(len(long_reply), 300)
+
+    def test_knowledge_base_answer_uses_enabled_public_content_and_internal_guidance(self):
+        settings = {
+            "ai_enabled": True,
+            "model_name": "deepseek-chat",
+            "api_key": "test-secret",
+            "base_url": "https://api.deepseek.invalid/v1",
+        }
+        knowledge_base = {
+            "id": "base-current",
+            "name": "当前知识库",
+            "facts": [
+                {"title": "启动方式", "content": "使用 Launcher.exe 启动。", "enabled": True, "priority": 10},
+                {"title": "旧内容", "content": "不要发送的停用事实", "enabled": False, "priority": 99},
+            ],
+            "qa_entries": [
+                {"questions": ["怎么启动"], "answer": "双击启动器。", "enabled": True, "priority": 5},
+                {"questions": ["停用问答"], "answer": "不要发送的停用答案", "enabled": False, "priority": 20},
+            ],
+            "rules": [
+                {"rule_type": "model_instruction", "instruction": "回答保持简短。", "enabled": True, "priority": 1},
+                {
+                    "rule_type": "pricing_policy",
+                    "name": "当前活动价",
+                    "intent": "pricing",
+                    "config_json": {"current_price": "9.9", "currency": "CNY"},
+                    "enabled": True,
+                    "priority": 2,
+                },
+                {
+                    "rule_type": "fixed_reply",
+                    "response": "不要发送的停用规则",
+                    "enabled": False,
+                    "priority": 99,
+                },
+            ],
+            "sources": [
+                {"title": "内部来源", "notes": "不得发送给模型的内部备注"},
+            ],
+        }
+
+        with (
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=settings),
+            patch.object(self.engine, "_generate_with_retry", return_value="请双击 Launcher.exe 启动。") as generate,
+        ):
+            answer = self.engine.answer_knowledge_base(
+                "account-1", knowledge_base, "这个工具怎么启动？"
+            )
+
+        self.assertEqual(answer, "请双击 Launcher.exe 启动。")
+        messages = generate.call_args.args[1]
+        system_text = messages[0]["content"]
+        self.assertIn("当前知识库", system_text)
+        self.assertIn("Launcher.exe", system_text)
+        self.assertIn("双击启动器", system_text)
+        self.assertIn("回答保持简短", system_text)
+        self.assertIn("pricing_policy", system_text)
+        self.assertIn('"current_price":"9.9"', system_text)
+        self.assertNotIn("不要发送的停用事实", system_text)
+        self.assertNotIn("不要发送的停用答案", system_text)
+        self.assertNotIn("不要发送的停用规则", system_text)
+        self.assertNotIn("不得发送给模型的内部备注", system_text)
+        self.assertNotIn("source_ids", system_text)
+        self.assertEqual(messages[-1], {"role": "user", "content": "这个工具怎么启动？"})
+
+    def test_knowledge_base_answer_validates_ai_configuration_and_result(self):
+        complete = {
+            "ai_enabled": True,
+            "model_name": "deepseek-chat",
+            "api_key": "test-secret",
+            "base_url": "https://api.deepseek.invalid/v1",
+        }
+        cases = (
+            ({**complete, "ai_enabled": False}, "尚未启用"),
+            ({**complete, "api_key": ""}, "API Key"),
+            ({**complete, "model_name": ""}, "未配置完整"),
+            ({**complete, "base_url": ""}, "未配置完整"),
+        )
+        for settings, expected in cases:
+            with self.subTest(expected=expected), patch(
+                "app.ai_reply_engine.db_manager.get_ai_reply_settings",
+                return_value=settings,
+            ):
+                with self.assertRaisesRegex(ValueError, expected):
+                    self.engine.answer_knowledge_base("account-1", {}, "测试问题")
+
+        with self.assertRaisesRegex(ValueError, "问题不能为空"):
+            self.engine.answer_knowledge_base("account-1", {}, "   ")
+        with (
+            patch(
+                "app.ai_reply_engine.db_manager.get_ai_reply_settings",
+                return_value=complete,
+            ),
+            patch.object(self.engine, "_generate_with_retry", return_value="  "),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "未返回可用答案"):
+                self.engine.answer_knowledge_base("account-1", {}, "测试问题")
+
+    def test_knowledge_base_answer_preserves_multiline_content_beyond_buyer_reply_limit(self):
+        settings = {
+            "ai_enabled": True,
+            "model_name": "deepseek-chat",
+            "api_key": "test-secret",
+            "base_url": "https://api.deepseek.invalid/v1",
+        }
+        model_answer = "第一步：下载安装包。\n\n第二步：完成配置。\n" + "补充说明。" * 80
+
+        with (
+            patch(
+                "app.ai_reply_engine.db_manager.get_ai_reply_settings",
+                return_value=settings,
+            ),
+            patch.object(
+                self.engine,
+                "_generate_with_retry",
+                return_value=model_answer,
+            ),
+        ):
+            answer = self.engine.answer_knowledge_base(
+                "account-1", {"name": "测试知识库"}, "请给我完整步骤"
+            )
+
+        self.assertGreater(len(answer), 300)
+        self.assertEqual(answer, model_answer)
+        self.assertIn("\n\n", answer)
+
+    def test_knowledge_answer_sanitizer_removes_thoughts_and_rejects_reasoning_leaks(self):
+        self.assertEqual(
+            self.engine._normalize_knowledge_answer(
+                "<think>这里是内部推理</think>\n第一段\n第二段"
+            ),
+            "第一段\n第二段",
+        )
+        self.assertIsNone(self.engine._normalize_knowledge_answer(None))
+        self.assertIsNone(
+            self.engine._normalize_knowledge_answer("这里包含系统提示，不应显示")
+        )
+
+    def test_knowledge_prompt_treats_internal_rules_as_answer_evidence(self):
+        prompt = self.engine._knowledge_base_qa_prompt({
+            "name": "价格知识库",
+            "facts": [],
+            "qa_entries": [],
+            "rules": [{
+                "rule_type": "pricing_policy",
+                "name": "当前售价",
+                "intent": "pricing",
+                "matchers": ["多少钱"],
+                "instruction": "",
+                "response": "",
+                "config_json": {"current_price": "9.9", "currency": "CNY"},
+                "enabled": True,
+                "priority": 10,
+            }],
+        })
+
+        self.assertIn("仅依据 <knowledge_data> 和 <internal_rules>", prompt)
+        self.assertIn("内部规则中的业务数据可以作为回答依据", prompt)
+        self.assertNotIn("仅依据 <knowledge_data> 中的事实和公开问答回答", prompt)
+        self.assertIn('"current_price":"9.9"', prompt)
+
+    def test_knowledge_prompt_truncation_keeps_valid_json_boundaries(self):
+        records = [{"content": "甲" * 10}, {"content": "乙" * 10}]
+
+        encoded = self.engine._limited_json_array(records, 30)
+
+        self.assertEqual(encoded, '[{"content":"甲甲甲甲甲甲甲甲甲甲"}]')
 
     def test_generate_reply_uses_model_without_logging_or_returning_empty_content(self):
         settings = {
@@ -208,6 +376,140 @@ class AIReplyEngineTests(unittest.TestCase):
             )
         self.assertIsNone(result)
         save.assert_not_called()
+
+    def _settings_for_policy_tests(self):
+        return {
+            "ai_enabled": True,
+            "model_name": "test-model",
+            "api_key": "secret",
+            "base_url": "https://example.invalid/v1",
+            "max_discount_percent": 10,
+            "max_discount_amount": 100,
+            "max_bargain_rounds": 3,
+            "context_enabled": True,
+            "context_message_limit": 8,
+            "context_expire_minutes": 60,
+            "custom_prompts": "",
+        }
+
+    def test_safety_policy_returns_exact_reply_without_model_call(self):
+        settings = self._settings_for_policy_tests()
+        runtime = Mock()
+        runtime.match.return_value = {
+            "snapshot": {"facts": [], "qa_entries": [], "rules": [{"intent": "safety", "response": "目前没有收到玩家反馈有封号情况出现。"}]},
+            "matches": [],
+            "fixed_reply": "目前没有收到玩家反馈有封号情况出现。",
+        }
+        with (
+            patch.object(ai_reply_module, "KnowledgeRuntimeService", return_value=runtime),
+            patch.object(self.engine, "is_ai_enabled", return_value=True),
+            patch.object(self.engine, "save_conversation", side_effect=["t1", "t2"]),
+            patch.object(self.engine, "_get_recent_user_messages", return_value=[]),
+            patch.object(self.engine, "get_conversation_context", return_value=[]),
+            patch.object(self.engine, "get_bargain_count", return_value=0),
+            patch.object(self.engine, "_generate_with_retry", return_value="模型回复") as generate,
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=settings),
+        ):
+            reply = self.engine.generate_reply(
+                "这个软件安全吗？", {"title": "Passistant", "price": "9.9", "desc": ""},
+                "chat-policy", "account-1", "buyer-1", "item-1", True,
+            )
+
+        self.assertEqual(reply, "目前没有收到玩家反馈有封号情况出现。")
+        generate.assert_not_called()
+
+    def test_commercial_policy_returns_fixed_reply_without_model_call(self):
+        settings = self._settings_for_policy_tests()
+        runtime = Mock()
+        runtime.match.return_value = {
+            "snapshot": {"facts": [], "qa_entries": [], "rules": [{"intent": "commercial_sensitive", "response": "这个问题涉及内部信息，暂不提供。"}]},
+            "matches": [],
+            "fixed_reply": "这个问题涉及内部信息，暂不提供。",
+        }
+        with (
+            patch.object(ai_reply_module, "KnowledgeRuntimeService", return_value=runtime),
+            patch.object(self.engine, "is_ai_enabled", return_value=True),
+            patch.object(self.engine, "save_conversation", side_effect=["t1", "t2"]),
+            patch.object(self.engine, "_get_recent_user_messages", return_value=[]),
+            patch.object(self.engine, "get_conversation_context", return_value=[]),
+            patch.object(self.engine, "get_bargain_count", return_value=0),
+            patch.object(self.engine, "_generate_with_retry", return_value="源码内容") as generate,
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=settings),
+        ):
+            reply = self.engine.generate_reply(
+                "可以给我源码和偏移吗？", {"title": "Passistant", "price": "9.9", "desc": ""},
+                "chat-commercial", "account-1", "buyer-1", "item-1", True,
+            )
+
+        self.assertEqual(reply, "这个问题涉及内部信息，暂不提供。")
+        generate.assert_not_called()
+
+    def test_corrupt_bound_rule_fails_closed_before_fixed_reply(self):
+        settings = self._settings_for_policy_tests()
+        runtime = Mock()
+        runtime.match.return_value = {
+            "snapshot": {
+                "facts": [], "qa_entries": [],
+                "rules": [{"intent": "public", "response": "不应发送的固定回复"}],
+                "rules_corrupt": ["broken-rule"],
+            },
+            "matches": [],
+            "fixed_reply": "不应发送的固定回复",
+        }
+        with (
+            patch.object(ai_reply_module, "KnowledgeRuntimeService", return_value=runtime),
+            patch.object(self.engine, "is_ai_enabled", return_value=True),
+            patch.object(self.engine, "save_conversation", side_effect=["t1", "t2"]),
+            patch.object(self.engine, "_get_recent_user_messages", return_value=[]),
+            patch.object(self.engine, "_generate_with_retry", return_value="模型回复") as generate,
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=settings),
+        ):
+            reply = self.engine.generate_reply(
+                "触发规则", {"title": "普通商品", "price": "10", "desc": ""},
+                "chat-corrupt", "account-1", "buyer-1", "item-1", True,
+            )
+
+        self.assertEqual(reply, ai_reply_module.HUMAN_CONFIRMATION_REPLY)
+        generate.assert_not_called()
+
+    def test_public_knowledge_is_added_to_system_message(self):
+        settings = self._settings_for_policy_tests()
+        match = {
+            "knowledge_key": "install.launcher",
+            "category": "install",
+            "answer": "请使用正式包中的 Launcher.exe 启动。",
+            "score": 100,
+        }
+        runtime = Mock()
+        runtime.match.return_value = {
+            "snapshot": {"facts": [], "qa_entries": [], "rules": []},
+            "matches": [match],
+            "fixed_reply": None,
+        }
+        runtime.build_context.return_value = "<public_product_knowledge>\n[install] 请使用正式包中的 Launcher.exe 启动。\n</public_product_knowledge>"
+        runtime.build_instruction_context.return_value = "<internal_product_rules>\n- 仅回答当前商品业务\n</internal_product_rules>"
+        with (
+            patch.object(ai_reply_module, "KnowledgeRuntimeService", return_value=runtime),
+            patch.object(self.engine, "is_ai_enabled", return_value=True),
+            patch.object(self.engine, "detect_intent", return_value="tech"),
+            patch.object(self.engine, "save_conversation", side_effect=["t1", "t2"]),
+            patch.object(self.engine, "_get_recent_user_messages", return_value=[]),
+            patch.object(self.engine, "get_conversation_context", return_value=[]),
+            patch.object(self.engine, "get_bargain_count", return_value=0),
+            patch.object(self.engine, "_generate_with_retry", return_value="按说明启动即可。") as generate,
+            patch("app.ai_reply_engine.db_manager.get_ai_reply_settings", return_value=settings),
+        ):
+            self.engine.generate_reply(
+                "怎么启动？", {"title": "Passistant", "price": "9.9", "desc": ""},
+                "chat-knowledge", "account-1", "buyer-1", "item-1", True,
+            )
+
+        messages = generate.call_args.args[1]
+        system_text = messages[0]["content"]
+        self.assertIn("<public_product_knowledge>", system_text)
+        self.assertIn("Launcher.exe", system_text)
+        self.assertNotIn("source_refs", system_text)
+        self.assertLess(system_text.index("<internal_product_rules>"), system_text.index("安全边界："))
 
     def test_public_settings_never_return_api_key(self):
         result = _public_ai_reply_settings({

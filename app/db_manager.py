@@ -8,6 +8,11 @@ import random
 import string
 import io
 import base64
+import uuid
+import re
+import unicodedata
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Tuple, Dict, Optional, Any
 from loguru import logger
@@ -16,6 +21,48 @@ from app.specification import (
     canonicalize_specification,
     specification_text,
 )
+
+
+# 回复风格只描述表达方式；商品价格、发货和其他业务规则必须进入知识库规则。
+GLOBAL_REPLY_STYLE_FORBIDDEN_TERMS = (
+    "9.9", "29.9", "passistant", "国服", "砍价", "发货", "封号", "安全", "区服", "激活码",
+)
+
+
+class KnowledgeVersionConflict(RuntimeError):
+    """商品知识文档的乐观并发版本冲突。"""
+
+    def __init__(self, expected_version: int, current_version: int):
+        self.expected_version = expected_version
+        self.current_version = current_version
+        super().__init__(
+            f"knowledge version conflict: expected={expected_version}, current={current_version}"
+        )
+
+
+class KnowledgeNotFound(RuntimeError):
+    """全局知识库或内容不存在。"""
+
+
+class KnowledgeBaseKeyConflict(RuntimeError):
+    """知识库名称或稳定 key 已存在。"""
+
+
+class KnowledgeBindingConflict(RuntimeError):
+    """同一商品重复绑定知识库。"""
+
+
+class KnowledgeSourceInUse(RuntimeError):
+    """来源仍被事实、规则或问答引用。"""
+
+
+class MigrationPrecondition(RuntimeError):
+    """全局知识迁移前置条件不满足。"""
+
+
+class CardInventoryConflict(RuntimeError):
+    """批量卡密在编辑期间已被发货或其他保存操作修改。"""
+
 
 class DBManager:
     """SQLite数据库管理，持久化存储Cookie和关键字"""
@@ -412,6 +459,180 @@ class DBManager:
             )
             ''')
 
+            # 商品知识文档与条目表。文档和条目分表，保证条目清空后仍保留版本，
+            # 以便 API 继续检测 stale write；专用 API 是唯一写入口。
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_product_knowledge_documents (
+                cookie_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                product_key TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 0,
+                seed_version TEXT,
+                checksum TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (cookie_id, item_id),
+                FOREIGN KEY (cookie_id, item_id)
+                    REFERENCES item_info(cookie_id, item_id) ON DELETE CASCADE
+            )
+            ''')
+
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_product_knowledge_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cookie_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                knowledge_key TEXT NOT NULL,
+                category TEXT NOT NULL,
+                question_patterns TEXT NOT NULL DEFAULT '[]',
+                keywords TEXT NOT NULL DEFAULT '[]',
+                answer TEXT NOT NULL,
+                source_refs TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (cookie_id, item_id)
+                    REFERENCES ai_product_knowledge_documents(cookie_id, item_id)
+                    ON DELETE CASCADE,
+                UNIQUE(cookie_id, item_id, knowledge_key)
+            )
+            ''')
+
+            cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_ai_product_knowledge_entries_scope
+            ON ai_product_knowledge_entries(cookie_id, item_id, enabled, category)
+            ''')
+
+            # 全局知识库聚合：知识库本身不归属账号，商品只保存绑定关系。
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_bases (
+                id TEXT PRIMARY KEY,
+                base_key TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT '',
+                version INTEGER NOT NULL DEFAULT 1,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                schema_version INTEGER NOT NULL DEFAULT 2,
+                seed_version TEXT,
+                checksum TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_facts (
+                id TEXT PRIMARY KEY,
+                knowledge_base_id TEXT NOT NULL,
+                fact_key TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'product',
+                title TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL,
+                source_ids TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, fact_key)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_sources (
+                id TEXT PRIMARY KEY,
+                knowledge_base_id TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                reference TEXT NOT NULL DEFAULT '',
+                url TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, source_key)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_rules (
+                id TEXT PRIMARY KEY,
+                knowledge_base_id TEXT NOT NULL,
+                rule_key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                rule_type TEXT NOT NULL,
+                intent TEXT NOT NULL DEFAULT 'general',
+                matchers TEXT NOT NULL DEFAULT '[]',
+                instruction TEXT NOT NULL DEFAULT '',
+                response TEXT NOT NULL DEFAULT '',
+                config_json TEXT NOT NULL DEFAULT '{}',
+                source_ids TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, rule_key)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_qa_entries (
+                id TEXT PRIMARY KEY,
+                knowledge_base_id TEXT NOT NULL,
+                qa_key TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'general',
+                questions TEXT NOT NULL DEFAULT '[]',
+                keywords TEXT NOT NULL DEFAULT '[]',
+                answer TEXT NOT NULL,
+                source_ids TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER NOT NULL DEFAULT 0,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, qa_key)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_item_knowledge_bindings (
+                cookie_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                knowledge_base_id TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (cookie_id, item_id, knowledge_base_id),
+                FOREIGN KEY (cookie_id, item_id) REFERENCES item_info(cookie_id, item_id) ON DELETE CASCADE,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(cookie_id, item_id, sort_order)
+            )
+            ''')
+            cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_ai_item_knowledge_bindings_item
+            ON ai_item_knowledge_bindings(cookie_id, item_id, sort_order)
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_migrations (
+                migration_key TEXT PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                details_checksum TEXT NOT NULL DEFAULT ''
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_reply_profile (
+                profile_key TEXT PRIMARY KEY DEFAULT 'default',
+                reply_style TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            cursor.execute(
+                "INSERT OR IGNORE INTO ai_reply_profile(profile_key, reply_style, version) VALUES (?, ?, 1)",
+                (
+                    "default",
+                    "语气自然、友好，略带俏皮，像真实的闲鱼卖家。优先用一到两句短句直接回答，可少量使用语气词；不要复述规则，不主动扩展买家没有询问的内容，避免客服腔、夸张承诺和连续表情。",
+                ),
+            )
+
             # 检查并添加 multi_quantity_delivery 列（用于多数量发货功能）
             try:
                 self._execute_sql(cursor, "SELECT multi_quantity_delivery FROM item_info LIMIT 1")
@@ -739,6 +960,7 @@ class DBManager:
             self._migrate_database(cursor)
 
             self.conn.commit()
+            self._ensure_global_knowledge_v2_migrated()
             logger.info("数据库初始化完成")
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}")
@@ -986,32 +1208,45 @@ class DBManager:
     def update_admin_user_id(self, cursor):
         """更新admin用户ID"""
         try:
-            logger.info("开始更新admin用户ID...")
-            # 创建默认admin用户（只在首次初始化时创建）
-            cursor.execute('SELECT COUNT(*) FROM users WHERE username = ?', ('admin',))
-            admin_exists = cursor.fetchone()[0] > 0
+            logger.info("开始同步环境变量管理员账号...")
+            admin_username = (os.getenv('ADMIN_USERNAME') or 'admin').strip() or 'admin'
+            configured_admin_password = os.getenv('ADMIN_PASSWORD')
+            admin_password = configured_admin_password or 'admin123'
+            admin_password_hash = hashlib.sha256(admin_password.encode()).hexdigest()
 
-            if not admin_exists:
-                # 首次创建 admin 用户。密码取环境变量 ADMIN_PASSWORD，没配才用 admin123。
-                # 此前这里写死 admin123，而 docker-compose 又强制要求填 ADMIN_PASSWORD，
-                # 结果是部署方以为自己设了强密码，实际登录的还是默认密码。
-                initial_password = (os.getenv('ADMIN_PASSWORD') or '').strip() or 'admin123'
-                default_password_hash = hashlib.sha256(initial_password.encode()).hexdigest()
-                cursor.execute('''
-                INSERT INTO users (username, email, password_hash) VALUES
-                ('admin', 'admin@localhost', ?)
-                ''', (default_password_hash,))
-                if initial_password == 'admin123':
-                    logger.warning("创建默认 admin 用户，密码为默认的 admin123，请登录后立即修改")
-                else:
-                    logger.info("创建 admin 用户，密码取自 ADMIN_PASSWORD 环境变量")
-
-            # 获取admin用户ID，用于历史数据绑定
-            self._execute_sql(cursor, "SELECT id FROM users WHERE username = 'admin'")
+            # admin@localhost 是内置管理员的稳定身份。Docker 重部署时按 .env
+            # 同步用户名和密码，避免持久化数据库继续保留旧凭据。
+            cursor.execute(
+                "SELECT id FROM users WHERE email = 'admin@localhost' LIMIT 1"
+            )
             admin_user = cursor.fetchone()
             if admin_user:
                 admin_user_id = admin_user[0]
+                if configured_admin_password:
+                    cursor.execute(
+                        '''
+                        UPDATE users
+                        SET username = ?, password_hash = ?, is_active = TRUE,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        ''',
+                        (admin_username, admin_password_hash, admin_user_id),
+                    )
+                    logger.info("已按环境变量同步管理员账号")
+                else:
+                    logger.info("未配置 ADMIN_PASSWORD，保留现有管理员凭据")
+            else:
+                cursor.execute('''
+                INSERT INTO users (username, email, password_hash)
+                VALUES (?, 'admin@localhost', ?)
+                ''', (admin_username, admin_password_hash))
+                admin_user_id = cursor.lastrowid
+                if admin_password == 'admin123':
+                    logger.warning("创建默认 admin 用户，密码为默认的 admin123")
+                else:
+                    logger.info("已按环境变量创建管理员账号")
 
+            if admin_user_id:
                 # 将历史cookies数据绑定到admin用户（如果user_id列不存在）
                 try:
                     self._execute_sql(cursor, "SELECT user_id FROM cookies LIMIT 1")
@@ -1184,7 +1419,7 @@ class DBManager:
             self._migrate_buyer_interaction_per_account(cursor)
 
             self.conn.commit()
-            logger.info(f"admin用户ID更新完成")
+            logger.info("环境变量管理员账号同步完成")
         except Exception as e:
             logger.error(f"更新admin用户ID失败: {e}")
             raise
@@ -1775,8 +2010,8 @@ class DBManager:
                     if existing:
                         user_id = existing[0]
                     else:
-                        # 获取admin用户ID作为默认值
-                        self._execute_sql(cursor, "SELECT id FROM users WHERE username = 'admin'")
+                        # 使用内置管理员的稳定邮箱获取默认归属，兼容自定义管理员用户名
+                        self._execute_sql(cursor, "SELECT id FROM users WHERE email = 'admin@localhost'")
                         admin_user = cursor.fetchone()
                         user_id = admin_user[0] if admin_user else 1
 
@@ -1809,6 +2044,11 @@ class DBManager:
                 cursor = self.conn.cursor()
                 # 删除关联的关键字
                 self._execute_sql(cursor, "DELETE FROM keywords WHERE cookie_id = ?", (cookie_id,))
+                # 历史数据库可能关闭 foreign_keys，显式清理商品知识绑定。
+                cursor.execute(
+                    "DELETE FROM ai_item_knowledge_bindings WHERE cookie_id = ?",
+                    (cookie_id,),
+                )
                 # 删除Cookie
                 self._execute_sql(cursor, "DELETE FROM cookies WHERE id = ?", (cookie_id,))
                 self.conn.commit()
@@ -2044,8 +2284,8 @@ class DBManager:
                     
                     # 如果没有提供user_id，尝试从现有记录获取，否则使用admin用户ID
                     if user_id is None:
-                        # 获取admin用户ID作为默认值
-                        self._execute_sql(cursor, "SELECT id FROM users WHERE username = 'admin'")
+                        # 使用内置管理员的稳定邮箱获取默认归属，兼容自定义管理员用户名
+                        self._execute_sql(cursor, "SELECT id FROM users WHERE email = 'admin@localhost'")
                         admin_user = cursor.fetchone()
                         user_id = admin_user[0] if admin_user else 1
                     
@@ -2443,28 +2683,24 @@ class DBManager:
         with self.lock:
             try:
                 cursor = self.conn.cursor()
-                cursor.execute('''
-                INSERT OR REPLACE INTO ai_reply_settings
-                (cookie_id, ai_enabled, model_name, api_key, base_url, user_agent,
-                 max_discount_percent, max_discount_amount, max_bargain_rounds,
-                 context_enabled, context_message_limit, context_expire_minutes,
-                 custom_prompts, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (
-                    cookie_id,
-                    settings.get('ai_enabled', False),
+                cursor.execute('SELECT 1 FROM ai_reply_settings WHERE cookie_id = ?', (cookie_id,))
+                exists = cursor.fetchone() is not None
+                values = (
+                    bool(settings.get('ai_enabled', False)),
                     settings.get('model_name', 'qwen-plus'),
-                    settings.get('api_key', ''),
                     settings.get('base_url', 'https://ai.corleom.com/v1'),
                     settings.get('user_agent', ''),
-                    settings.get('max_discount_percent', 10),
-                    settings.get('max_discount_amount', 100),
-                    settings.get('max_bargain_rounds', 3),
-                    settings.get('context_enabled', True),
+                    bool(settings.get('context_enabled', True)),
                     max(2, min(30, int(settings.get('context_message_limit', 12)))),
                     max(5, min(1440, int(settings.get('context_expire_minutes', 120)))),
-                    settings.get('custom_prompts', '')
-                ))
+                )
+                if exists:
+                    if settings.get('api_key'):
+                        cursor.execute('''UPDATE ai_reply_settings SET ai_enabled=?, model_name=?, api_key=?, base_url=?, user_agent=?, context_enabled=?, context_message_limit=?, context_expire_minutes=?, updated_at=CURRENT_TIMESTAMP WHERE cookie_id=?''', (*values[:2], settings.get('api_key'), *values[2:], cookie_id))
+                    else:
+                        cursor.execute('''UPDATE ai_reply_settings SET ai_enabled=?, model_name=?, base_url=?, user_agent=?, context_enabled=?, context_message_limit=?, context_expire_minutes=?, updated_at=CURRENT_TIMESTAMP WHERE cookie_id=?''', (*values, cookie_id))
+                else:
+                    cursor.execute('''INSERT INTO ai_reply_settings(cookie_id, ai_enabled, model_name, api_key, base_url, user_agent, context_enabled, context_message_limit, context_expire_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (cookie_id, values[0], values[1], settings.get('api_key', ''), values[2], values[3], values[4], values[5], values[6]))
                 self.conn.commit()
                 logger.debug(f"AI回复设置保存成功: {cookie_id}")
                 return True
@@ -3373,7 +3609,7 @@ class DBManager:
                         placeholders = ','.join(['?' for _ in user_cookie_ids])
 
                         # 删除用户相关数据
-                        related_tables = ['message_notifications', 'default_replies', 'item_info',
+                        related_tables = ['message_notifications', 'default_replies', 'ai_item_knowledge_bindings', 'item_info',
                                         'cookie_status', 'keywords', 'ai_conversations', 'ai_reply_settings']
 
                         for table in related_tables:
@@ -3385,7 +3621,7 @@ class DBManager:
                     # 系统级导入：清空所有数据（除了用户和管理员密码）
                     tables = [
                         'message_notifications', 'notification_channels', 'default_replies',
-                        'delivery_rules', 'cards', 'item_info', 'cookie_status', 'keywords',
+                        'delivery_rules', 'cards', 'ai_item_knowledge_bindings', 'item_info', 'cookie_status', 'keywords',
                         'ai_conversations', 'ai_reply_settings', 'ai_item_cache', 'cookies'
                     ]
 
@@ -3983,7 +4219,9 @@ class DBManager:
                         'spec_name': row[11],
                         'spec_value': row[12],
                         'created_at': row[13],
-                        'updated_at': row[14]
+                        'updated_at': row[14],
+                        'inventory_revision': self._card_inventory_revision(row[5])
+                        if row[2] == 'data' else None,
                     })
 
                 return cards
@@ -4038,18 +4276,25 @@ class DBManager:
                         'spec_name': row[11],
                         'spec_value': row[12],
                         'created_at': row[13],
-                        'updated_at': row[14]
+                        'updated_at': row[14],
+                        'inventory_revision': self._card_inventory_revision(row[5])
+                        if row[2] == 'data' else None,
                     }
                 return None
             except Exception as e:
                 logger.error(f"获取卡券失败: {e}")
                 return None
 
+    @staticmethod
+    def _card_inventory_revision(data_content: Optional[str]) -> str:
+        return hashlib.sha256((data_content or '').encode('utf-8')).hexdigest()
+
     def update_card(self, card_id: int, name: str = None, card_type: str = None,
                    api_config=None, text_content: str = None, data_content: str = None,
                    image_url: str = None, description: str = None, enabled: bool = None,
                    delay_seconds: int = None, is_multi_spec: bool = None, spec_name: str = None,
-                   spec_value: str = None, user_id: int = None):
+                   spec_value: str = None, user_id: int = None,
+                   expected_inventory_revision: str = None):
         """更新卡券（支持用户隔离）"""
         with self.lock:
             try:
@@ -4063,6 +4308,26 @@ class DBManager:
                         api_config_str = str(api_config)
 
                 cursor = self.conn.cursor()
+
+                inventory_guard_content = None
+                if data_content is not None:
+                    if not expected_inventory_revision:
+                        raise CardInventoryConflict("缺少卡密库存版本，请刷新后重试")
+
+                    inventory_query = "SELECT data_content FROM cards WHERE id = ?"
+                    inventory_params = [card_id]
+                    if user_id is not None:
+                        inventory_query += " AND user_id = ?"
+                        inventory_params.append(user_id)
+                    cursor.execute(inventory_query, inventory_params)
+                    inventory_row = cursor.fetchone()
+                    if not inventory_row:
+                        return False
+
+                    inventory_guard_content = inventory_row[0] or ''
+                    current_revision = self._card_inventory_revision(inventory_guard_content)
+                    if current_revision != expected_inventory_revision:
+                        raise CardInventoryConflict("卡密库存已变化，请刷新后重试")
 
                 # 构建更新语句
                 update_fields = []
@@ -4115,6 +4380,9 @@ class DBManager:
                 if user_id is not None:
                     sql += " AND user_id = ?"
                     params.append(user_id)
+                if data_content is not None:
+                    sql += " AND COALESCE(data_content, '') = ?"
+                    params.append(inventory_guard_content)
                 self._execute_sql(cursor, sql, params)
 
                 if cursor.rowcount > 0:
@@ -4122,6 +4390,8 @@ class DBManager:
                     logger.info(f"更新卡券成功: ID {card_id}")
                     return True
                 else:
+                    if data_content is not None:
+                        raise CardInventoryConflict("卡密库存已变化，请刷新后重试")
                     return False  # 没有找到对应的记录
 
             except Exception as e:
@@ -5007,6 +5277,1152 @@ class DBManager:
         except Exception as e:
             logger.error(f"获取商品信息失败: {e}")
             return None
+
+    # -------------------- 商品知识库操作 --------------------
+    @staticmethod
+    def _knowledge_json(value: Any) -> str:
+        """将知识条目的数组字段稳定序列化为 UTF-8 JSON。"""
+        if value is None:
+            value = []
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                value = []
+        if not isinstance(value, list):
+            value = list(value) if isinstance(value, tuple) else []
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _knowledge_parse_json(value: Any) -> list:
+        if value is None:
+            return []
+        try:
+            parsed = json.loads(value) if isinstance(value, str) else value
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    def get_product_knowledge_document(self, cookie_id: str, item_id: str) -> Dict[str, Any]:
+        """返回一个商品的知识文档元数据；不存在时返回 version=0 空文档。"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                '''
+                SELECT cookie_id, item_id, product_key, display_name, version,
+                       seed_version, checksum, created_at, updated_at
+                FROM ai_product_knowledge_documents
+                WHERE cookie_id = ? AND item_id = ?
+                ''',
+                (cookie_id, item_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    'cookie_id': cookie_id,
+                    'item_id': item_id,
+                    'product_key': 'passistant',
+                    'display_name': 'Passistant 知识库',
+                    'version': 0,
+                    'seed_version': None,
+                    'checksum': '',
+                    'entry_count': 0,
+                    'created_at': None,
+                    'updated_at': None,
+                }
+
+            cursor.execute(
+                '''
+                SELECT COUNT(*) FROM ai_product_knowledge_entries
+                WHERE cookie_id = ? AND item_id = ?
+                ''',
+                (cookie_id, item_id),
+            )
+            entry_count = int(cursor.fetchone()[0] or 0)
+            return {
+                'cookie_id': row[0],
+                'item_id': row[1],
+                'product_key': row[2],
+                'display_name': row[3],
+                'version': int(row[4]),
+                'seed_version': row[5],
+                'checksum': row[6] or '',
+                'entry_count': entry_count,
+                'created_at': row[7],
+                'updated_at': row[8],
+            }
+
+    def list_product_knowledge_entries(
+        self,
+        cookie_id: str,
+        item_id: str,
+        include_disabled: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """读取一个商品的知识条目；默认包含停用条目供管理页编辑。"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            query = '''
+                SELECT id, cookie_id, item_id, knowledge_key, category,
+                       question_patterns, keywords, answer, source_refs,
+                       priority, enabled, created_at, updated_at
+                FROM ai_product_knowledge_entries
+                WHERE cookie_id = ? AND item_id = ?
+            '''
+            params: List[Any] = [cookie_id, item_id]
+            if not include_disabled:
+                query += ' AND enabled = 1'
+            query += ' ORDER BY priority DESC, knowledge_key ASC'
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'cookie_id': row[1],
+                    'item_id': row[2],
+                    'knowledge_key': row[3],
+                    'category': row[4],
+                    'question_patterns': self._knowledge_parse_json(row[5]),
+                    'keywords': self._knowledge_parse_json(row[6]),
+                    'answer': row[7],
+                    'source_refs': self._knowledge_parse_json(row[8]),
+                    'priority': int(row[9]),
+                    'enabled': bool(row[10]),
+                    'created_at': row[11],
+                    'updated_at': row[12],
+                }
+                for row in rows
+            ]
+
+    def replace_product_knowledge(
+        self,
+        cookie_id: str,
+        item_id: str,
+        *,
+        product_key: str,
+        display_name: str,
+        entries: List[Dict[str, Any]],
+        expected_version: int,
+        seed_version: Optional[str] = None,
+        checksum: str = '',
+    ) -> Dict[str, Any]:
+        """在一个事务中替换商品知识并递增版本。"""
+        if not isinstance(expected_version, int) or expected_version < 0:
+            raise ValueError('expected_version must be a non-negative integer')
+        if not isinstance(entries, list):
+            raise ValueError('entries must be a list')
+
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                '''
+                SELECT version FROM ai_product_knowledge_documents
+                WHERE cookie_id = ? AND item_id = ?
+                ''',
+                (cookie_id, item_id),
+            )
+            row = cursor.fetchone()
+            current_version = int(row[0]) if row else 0
+            if current_version != expected_version:
+                raise KnowledgeVersionConflict(expected_version, current_version)
+
+            try:
+                cursor.execute('BEGIN')
+                next_version = current_version + 1
+                if row:
+                    cursor.execute(
+                        '''
+                        UPDATE ai_product_knowledge_documents
+                        SET product_key = ?, display_name = ?, version = ?,
+                            seed_version = ?, checksum = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE cookie_id = ? AND item_id = ?
+                        ''',
+                        (
+                            product_key,
+                            display_name,
+                            next_version,
+                            seed_version,
+                            checksum or '',
+                            cookie_id,
+                            item_id,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        '''
+                        INSERT INTO ai_product_knowledge_documents
+                        (cookie_id, item_id, product_key, display_name, version,
+                         seed_version, checksum)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''',
+                        (
+                            cookie_id,
+                            item_id,
+                            product_key,
+                            display_name,
+                            next_version,
+                            seed_version,
+                            checksum or '',
+                        ),
+                    )
+
+                cursor.execute(
+                    '''
+                    DELETE FROM ai_product_knowledge_entries
+                    WHERE cookie_id = ? AND item_id = ?
+                    ''',
+                    (cookie_id, item_id),
+                )
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        raise ValueError('each knowledge entry must be an object')
+                    cursor.execute(
+                        '''
+                        INSERT INTO ai_product_knowledge_entries
+                        (cookie_id, item_id, knowledge_key, category,
+                         question_patterns, keywords, answer, source_refs,
+                         priority, enabled)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''',
+                        (
+                            cookie_id,
+                            item_id,
+                            entry.get('knowledge_key', ''),
+                            entry.get('category', ''),
+                            self._knowledge_json(entry.get('question_patterns', [])),
+                            self._knowledge_json(entry.get('keywords', [])),
+                            entry.get('answer', ''),
+                            self._knowledge_json(entry.get('source_refs', [])),
+                            int(entry.get('priority', 0)),
+                            1 if entry.get('enabled', True) else 0,
+                        ),
+                    )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+            return self.get_product_knowledge_document(cookie_id, item_id)
+
+    def delete_product_knowledge_for_item(self, cookie_id: str, item_id: str) -> bool:
+        """删除一个商品的知识文档和条目，返回是否存在过数据。"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                'DELETE FROM ai_product_knowledge_entries WHERE cookie_id = ? AND item_id = ?',
+                (cookie_id, item_id),
+            )
+            entry_deleted = cursor.rowcount > 0
+            cursor.execute(
+                'DELETE FROM ai_product_knowledge_documents WHERE cookie_id = ? AND item_id = ?',
+                (cookie_id, item_id),
+            )
+            document_deleted = cursor.rowcount > 0
+            self.conn.commit()
+            return entry_deleted or document_deleted
+
+    # -------------------- 全局知识库聚合操作 --------------------
+    _KNOWLEDGE_CONTENT_TABLES = {
+        "facts": "ai_knowledge_facts",
+        "sources": "ai_knowledge_sources",
+        "rules": "ai_knowledge_rules",
+        "qa_entries": "ai_knowledge_qa_entries",
+    }
+    _ALLOWED_KNOWLEDGE_RULE_TYPES = {
+        "fixed_reply", "topic_refusal", "pricing_policy", "bargain_policy",
+        "model_instruction", "output_guard",
+    }
+    _KNOWLEDGE_MUTABLE_FIELDS = {
+        "facts": {"fact_key", "category", "title", "content", "source_ids", "priority", "enabled"},
+        "sources": {"source_key", "title", "reference", "url", "notes"},
+        "rules": {"rule_key", "name", "rule_type", "intent", "matchers", "instruction", "response", "config_json", "source_ids", "priority", "enabled"},
+        "qa_entries": {"qa_key", "category", "questions", "keywords", "answer", "source_ids", "priority", "enabled"},
+    }
+
+    @staticmethod
+    def _new_knowledge_id() -> str:
+        return str(uuid.uuid4())
+
+    @staticmethod
+    def _knowledge_list(value: Any) -> list:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, json.JSONDecodeError):
+                return []
+        return list(value) if isinstance(value, (list, tuple)) else []
+
+    @classmethod
+    def _knowledge_encode(cls, value: Any) -> str:
+        return json.dumps(cls._knowledge_list(value), ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _normalize_persisted_rule_config(rule_type: str, config: Any,
+                                         matchers: list) -> Any:
+        """把 v2 早期落库格式转换为当前编辑器/API 使用的严格格式。"""
+        if not isinstance(config, dict):
+            return config
+        normalized = dict(config)
+        if rule_type == "pricing_policy":
+            legacy_fields = {
+                "regular_price": "original_price",
+                "promotion_price": "current_price",
+            }
+            for old_name, new_name in legacy_fields.items():
+                if new_name not in normalized and old_name in normalized:
+                    normalized[new_name] = str(normalized[old_name])
+                normalized.pop(old_name, None)
+            normalized.pop("allow_extra_discount", None)
+            for field in ("original_price", "current_price"):
+                if field in normalized and not isinstance(normalized[field], str):
+                    normalized[field] = str(normalized[field])
+        elif rule_type == "bargain_policy":
+            if "max_discount_amount" in normalized and not isinstance(normalized["max_discount_amount"], str):
+                normalized["max_discount_amount"] = str(normalized["max_discount_amount"])
+            normalized.setdefault("floor_mode", "current_price")
+        elif rule_type == "output_guard":
+            if normalized.pop("only_when_asked", False):
+                normalized.setdefault("forbidden_unless_asked", list(matchers))
+            normalized.setdefault("fallback_mode", "human_confirmation")
+        return normalized
+
+    @classmethod
+    def _knowledge_content_dict(cls, kind: str, row: tuple) -> Dict[str, Any]:
+        if kind == "facts":
+            return {
+                "id": row[0], "knowledge_base_id": row[1], "fact_key": row[2],
+                "category": row[3], "title": row[4], "content": row[5],
+                "source_ids": cls._knowledge_list(row[6]), "priority": int(row[7]),
+                "enabled": bool(row[8]), "created_at": row[9], "updated_at": row[10],
+            }
+        if kind == "sources":
+            return {
+                "id": row[0], "knowledge_base_id": row[1], "source_key": row[2],
+                "title": row[3], "reference": row[4], "url": row[5], "notes": row[6],
+                "created_at": row[7], "updated_at": row[8],
+            }
+        if kind == "rules":
+            matchers = cls._knowledge_list(row[6])
+            try:
+                config_json = json.loads(row[9] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                config_json = None
+            config_json = cls._normalize_persisted_rule_config(row[4], config_json, matchers)
+            return {
+                "id": row[0], "knowledge_base_id": row[1], "rule_key": row[2],
+                "name": row[3], "rule_type": row[4], "intent": row[5],
+                "matchers": matchers, "instruction": row[7],
+                "response": row[8], "config_json": config_json,
+                "source_ids": cls._knowledge_list(row[10]), "priority": int(row[11]),
+                "enabled": bool(row[12]), "created_at": row[13], "updated_at": row[14],
+            }
+        return {
+            "id": row[0], "knowledge_base_id": row[1], "qa_key": row[2],
+            "category": row[3], "questions": cls._knowledge_list(row[4]),
+            "keywords": cls._knowledge_list(row[5]), "answer": row[6],
+            "source_ids": cls._knowledge_list(row[7]), "priority": int(row[8]),
+            "enabled": bool(row[9]), "created_at": row[10], "updated_at": row[11],
+        }
+
+    def _get_knowledge_base_row(self, cursor, base_id: str):
+        cursor.execute(
+            "SELECT id, base_key, name, description, version, enabled, schema_version, seed_version, checksum, created_at, updated_at "
+            "FROM ai_knowledge_bases WHERE id = ?", (base_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise KnowledgeNotFound("knowledge base not found")
+        return row
+
+    def _validate_source_ids(self, cursor, base_id: str, source_ids: Any) -> list:
+        ids = self._knowledge_list(source_ids)
+        if len(ids) != len(set(ids)):
+            raise ValueError("source_ids must be unique")
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            cursor.execute(
+                f"SELECT id FROM ai_knowledge_sources WHERE knowledge_base_id = ? AND id IN ({placeholders})",
+                [base_id, *ids],
+            )
+            found = {r[0] for r in cursor.fetchall()}
+            if found != set(ids):
+                raise ValueError("source_ids must reference sources in the same knowledge base")
+        return ids
+
+    @classmethod
+    def _validate_knowledge_input_fields(cls, kind: str, values: Dict[str, Any]) -> None:
+        if kind not in cls._KNOWLEDGE_MUTABLE_FIELDS:
+            raise ValueError("unsupported knowledge content")
+        unknown = set(values or {}) - cls._KNOWLEDGE_MUTABLE_FIELDS[kind]
+        if unknown:
+            raise ValueError(f"unknown {kind} fields: {', '.join(sorted(unknown))}")
+
+    @staticmethod
+    def _validate_plain_text_list(value: Any, field: str, *, minimum: int = 0,
+                                  maximum: int = 100, item_maximum: int = 120) -> list:
+        if not isinstance(value, list) or not minimum <= len(value) <= maximum:
+            raise ValueError(f"{field} must contain {minimum}-{maximum} values")
+        normalized = []
+        seen = set()
+        for item in value:
+            if not isinstance(item, str) or not item.strip() or len(item.strip()) > item_maximum:
+                raise ValueError(f"{field} must contain short non-empty strings")
+            item = unicodedata.normalize("NFKC", item).strip()
+            marker = item.casefold()
+            if marker not in seen:
+                seen.add(marker)
+                normalized.append(item)
+        if len(normalized) < minimum:
+            raise ValueError(f"{field} must contain at least {minimum} unique values")
+        return normalized
+
+    @staticmethod
+    def _validate_decimal_string(value: Any, field: str, *, nullable: bool = False) -> Optional[str]:
+        if value is None and nullable:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} must be a decimal string")
+        try:
+            decimal_value = Decimal(value.strip())
+        except InvalidOperation as exc:
+            raise ValueError(f"{field} must be a decimal string") from exc
+        if not decimal_value.is_finite() or decimal_value < 0:
+            raise ValueError(f"{field} must be non-negative")
+        return format(decimal_value, "f")
+
+    @classmethod
+    def _validate_knowledge_content_values(cls, kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
+        """限制内容形状，避免把任意脚本或不可审计规则写入运行时。"""
+        if kind not in cls._KNOWLEDGE_CONTENT_TABLES:
+            raise ValueError("unsupported knowledge content")
+        values = dict(values or {})
+        required = {
+            "facts": ("fact_key", "content"),
+            "sources": ("source_key", "title"),
+            "rules": ("rule_key", "name", "rule_type"),
+            "qa_entries": ("qa_key", "answer"),
+        }[kind]
+        if any(not str(values.get(field, "") or "").strip() for field in required):
+            raise ValueError(f"{kind} required fields are missing")
+        key_field = {"facts": "fact_key", "sources": "source_key", "rules": "rule_key", "qa_entries": "qa_key"}[kind]
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,79}", str(values.get(key_field, "")).strip().lower()):
+            raise ValueError(f"{key_field} is invalid")
+        if "priority" in values and (isinstance(values["priority"], bool) or not isinstance(values["priority"], int) or not -100 <= values["priority"] <= 100):
+            raise ValueError("priority must be an integer between -100 and 100")
+        if "enabled" in values and not isinstance(values["enabled"], bool):
+            raise ValueError("enabled must be boolean")
+        text_limits = {
+            "facts": {"category": (0, 80), "title": (0, 120), "content": (1, 800)},
+            "sources": {"title": (1, 120), "reference": (0, 500), "url": (0, 2000), "notes": (0, 500)},
+            "rules": {"name": (1, 120), "intent": (0, 80)},
+            "qa_entries": {"category": (0, 80), "answer": (1, 800)},
+        }[kind]
+        for field, (minimum, maximum) in text_limits.items():
+            if field not in values:
+                continue
+            value = values.get(field)
+            if value is None:
+                value = ""
+            if not isinstance(value, str) or not minimum <= len(value.strip()) <= maximum:
+                raise ValueError(f"{field} must contain {minimum}-{maximum} characters")
+            values[field] = value.strip()
+        for key, maximum, item_maximum in (("matchers", 100, 120), ("questions", 20, 80), ("keywords", 30, 32), ("source_ids", 8, 128)):
+            if key in values:
+                values[key] = cls._validate_plain_text_list(values[key], key, maximum=maximum, item_maximum=item_maximum)
+        if kind == "rules":
+            rule_type = str(values.get("rule_type", "")).strip()
+            if rule_type not in cls._ALLOWED_KNOWLEDGE_RULE_TYPES:
+                raise ValueError("rule_type is not supported")
+            config = values.get("config_json", {})
+            if not isinstance(config, dict):
+                raise ValueError("config_json must be an object")
+            config = dict(config)
+            allowed_config = {
+                "fixed_reply": {"match_mode"},
+                "topic_refusal": {"match_mode"},
+                "pricing_policy": {"currency", "original_price", "current_price", "promotion_label", "promotion_end", "regular_price", "promotion_price", "allow_extra_discount"},
+                "bargain_policy": {"max_discount_percent", "max_discount_amount", "max_rounds", "floor_mode", "floor_price"},
+                "model_instruction": set(),
+                "output_guard": {"forbidden_patterns", "forbidden_unless_asked", "fallback_mode"},
+            }[rule_type]
+            unknown_config = set(config) - allowed_config
+            if unknown_config:
+                raise ValueError(f"unknown {rule_type} config fields: {', '.join(sorted(unknown_config))}")
+            instruction = str(values.get("instruction", "") or "").strip()
+            response = str(values.get("response", "") or "").strip()
+            if rule_type in {"fixed_reply", "topic_refusal"}:
+                values["matchers"] = cls._validate_plain_text_list(values.get("matchers", []), "matchers", minimum=1)
+                if not 1 <= len(response) <= 300:
+                    raise ValueError("fixed rule response must contain 1-300 characters")
+                if instruction:
+                    raise ValueError("fixed rules cannot contain model instructions")
+                match_mode = config.get("match_mode", "any")
+                if match_mode not in {"any", "all"}:
+                    raise ValueError("match_mode must be any or all")
+                config["match_mode"] = match_mode
+            elif rule_type == "pricing_policy":
+                if config.get("currency", "CNY") != "CNY":
+                    raise ValueError("pricing currency must be CNY")
+                config["currency"] = "CNY"
+                price_fields = ("original_price", "current_price", "regular_price", "promotion_price")
+                present_prices = [field for field in price_fields if field in config]
+                if not present_prices:
+                    raise ValueError("pricing policy requires a price")
+                for field in present_prices:
+                    config[field] = cls._validate_decimal_string(config[field], field)
+                for field in ("promotion_label", "promotion_end"):
+                    if config.get(field) is not None and (not isinstance(config[field], str) or len(config[field]) > 120):
+                        raise ValueError(f"{field} must be a short string or null")
+                if "allow_extra_discount" in config and not isinstance(config["allow_extra_discount"], bool):
+                    raise ValueError("allow_extra_discount must be boolean")
+            elif rule_type == "bargain_policy":
+                percent = config.get("max_discount_percent", 0)
+                if isinstance(percent, bool) or not isinstance(percent, (int, float)) or not 0 <= percent <= 100:
+                    raise ValueError("max_discount_percent must be between 0 and 100")
+                rounds = config.get("max_rounds", 0)
+                if isinstance(rounds, bool) or not isinstance(rounds, int) or not 0 <= rounds <= 100:
+                    raise ValueError("max_rounds must be an integer between 0 and 100")
+                config["max_discount_percent"] = percent
+                config["max_rounds"] = rounds
+                config["max_discount_amount"] = cls._validate_decimal_string(config.get("max_discount_amount", "0"), "max_discount_amount")
+                floor_mode = config.get("floor_mode", "current_price")
+                if floor_mode not in {"current_price", "fixed"}:
+                    raise ValueError("floor_mode must be current_price or fixed")
+                config["floor_mode"] = floor_mode
+                config["floor_price"] = cls._validate_decimal_string(config.get("floor_price"), "floor_price", nullable=True)
+                if floor_mode == "fixed" and config["floor_price"] is None:
+                    raise ValueError("fixed floor_mode requires floor_price")
+            elif rule_type == "model_instruction":
+                if not 1 <= len(instruction) <= 800:
+                    raise ValueError("model instruction must contain 1-800 characters")
+                normalized_instruction = unicodedata.normalize("NFKC", instruction).casefold()
+                dangerous_terms = ("忽略系统", "忽略并覆盖", "覆盖系统", "system prompt", "api key", "cookie", "token", "password", "执行代码", "运行代码", "执行sql")
+                if any(term in normalized_instruction for term in dangerous_terms) or re.search(r"(?:[a-z]:\\|/app/|\.\./)", normalized_instruction):
+                    raise ValueError("model instruction contains unsafe directives")
+                if response:
+                    raise ValueError("model instructions cannot contain a fixed response")
+            else:
+                forbidden = config.get("forbidden_unless_asked", config.get("forbidden_patterns", []))
+                forbidden = cls._validate_plain_text_list(forbidden, "forbidden_unless_asked", minimum=1)
+                if "forbidden_patterns" in config:
+                    config["forbidden_patterns"] = cls._validate_plain_text_list(config["forbidden_patterns"], "forbidden_patterns", minimum=1)
+                config["forbidden_unless_asked"] = forbidden
+                fallback = config.get("fallback_mode", "human_confirmation")
+                if fallback not in {"top_match", "human_confirmation"}:
+                    raise ValueError("fallback_mode is invalid")
+                config["fallback_mode"] = fallback
+            values["config_json"] = config
+        if kind == "sources":
+            url = str(values.get("url", "") or "").strip()
+            if url and not re.fullmatch(r"https?://[^\s]+", url, flags=re.IGNORECASE):
+                raise ValueError("source url must use http or https")
+        return values
+
+    def _refresh_knowledge_base_checksum(self, cursor, base_id: str) -> str:
+        aggregate = {"facts": [], "sources": [], "rules": [], "qa_entries": []}
+        for kind, table in self._KNOWLEDGE_CONTENT_TABLES.items():
+            cursor.execute(f"SELECT * FROM {table} WHERE knowledge_base_id = ? ORDER BY id", (base_id,))
+            for row in cursor.fetchall():
+                value = self._knowledge_content_dict(kind, row)
+                value.pop("id", None); value.pop("knowledge_base_id", None)
+                value.pop("created_at", None); value.pop("updated_at", None)
+                aggregate[kind].append(value)
+        # UUID 是存储标识而非内容语义；按稳定业务 key 排序，重排条目仍得到同一 checksum。
+        stable_keys = {"facts": "fact_key", "sources": "source_key", "rules": "rule_key", "qa_entries": "qa_key"}
+        for kind, values in aggregate.items():
+            values.sort(key=lambda value: (str(value.get(stable_keys[kind], "")), json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
+        payload = json.dumps(aggregate, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def _bump_knowledge_base(self, cursor, base_id: str, expected_version: int) -> int:
+        row = self._get_knowledge_base_row(cursor, base_id)
+        current = int(row[4])
+        if not isinstance(expected_version, int) or isinstance(expected_version, bool) or expected_version != current:
+            raise KnowledgeVersionConflict(expected_version, current)
+        next_version = current + 1
+        cursor.execute(
+            "UPDATE ai_knowledge_bases SET version = ?, checksum = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (next_version, self._refresh_knowledge_base_checksum(cursor, base_id), base_id),
+        )
+        return next_version
+
+    def create_knowledge_base(self, name: str, description: str = "", *, base_key: Optional[str] = None,
+                               enabled: bool = True, seed_version: Optional[str] = None,
+                               checksum: str = "") -> Dict[str, Any]:
+        name = str(name or "").strip(); description = str(description or "").strip()
+        if not 1 <= len(name) <= 80:
+            raise ValueError("name must contain 1-80 characters")
+        if len(description) > 500:
+            raise ValueError("description must contain at most 500 characters")
+        if base_key is None:
+            slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "knowledge"
+            base_key = f"{slug}-{uuid.uuid4().hex[:8]}"
+        base_key = str(base_key).strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,79}", base_key):
+            raise ValueError("base_key is invalid")
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                base_id = self._new_knowledge_id()
+                cursor.execute(
+                    "INSERT INTO ai_knowledge_bases(id, base_key, name, description, version, enabled, seed_version, checksum) VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
+                    (base_id, base_key, name, description, 1 if enabled else 0, seed_version, checksum or ""),
+                )
+                self.conn.commit()
+                return self.get_knowledge_base(base_id, include_contents=False)
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback()
+                raise KnowledgeBaseKeyConflict("knowledge base name or key already exists") from exc
+            except Exception:
+                self.conn.rollback(); raise
+
+    def list_knowledge_bases(self, *, enabled_only: bool = False) -> List[Dict[str, Any]]:
+        self._ensure_global_knowledge_v2_migrated()
+        with self.lock:
+            cursor = self.conn.cursor()
+            query = """SELECT b.id, b.base_key, b.name, b.description, b.version, b.enabled,
+                       b.schema_version, b.seed_version, b.checksum, b.created_at, b.updated_at,
+                       (SELECT COUNT(*) FROM ai_knowledge_facts f WHERE f.knowledge_base_id=b.id),
+                       (SELECT COUNT(*) FROM ai_knowledge_sources s WHERE s.knowledge_base_id=b.id),
+                       (SELECT COUNT(*) FROM ai_knowledge_rules r WHERE r.knowledge_base_id=b.id),
+                       (SELECT COUNT(*) FROM ai_knowledge_qa_entries q WHERE q.knowledge_base_id=b.id),
+                       (SELECT COUNT(*) FROM ai_item_knowledge_bindings x WHERE x.knowledge_base_id=b.id)
+                       FROM ai_knowledge_bases b"""
+            params = []
+            if enabled_only:
+                query += " WHERE b.enabled = 1"
+            query += " ORDER BY b.name COLLATE NOCASE, b.base_key"
+            cursor.execute(query, params)
+            result = []
+            for row in cursor.fetchall():
+                result.append({
+                    "id": row[0], "base_key": row[1], "name": row[2], "description": row[3],
+                    "version": int(row[4]), "enabled": bool(row[5]), "schema_version": int(row[6]),
+                    "seed_version": row[7], "checksum": row[8] or "", "created_at": row[9], "updated_at": row[10],
+                    "fact_count": int(row[11]), "source_count": int(row[12]), "rule_count": int(row[13]),
+                    "qa_count": int(row[14]), "binding_count": int(row[15]),
+                })
+            return result
+
+    def get_knowledge_base(self, base_id: str, *, include_contents: bool = True) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor(); row = self._get_knowledge_base_row(cursor, base_id)
+            result = {
+                "id": row[0], "base_key": row[1], "name": row[2], "description": row[3],
+                "version": int(row[4]), "enabled": bool(row[5]), "schema_version": int(row[6]),
+                "seed_version": row[7], "checksum": row[8] or "", "created_at": row[9], "updated_at": row[10],
+            }
+            if include_contents:
+                result["facts"] = self._list_knowledge_content_locked(cursor, "facts", base_id)
+                result["sources"] = self._list_knowledge_content_locked(cursor, "sources", base_id)
+                result["rules"] = self._list_knowledge_content_locked(cursor, "rules", base_id)
+                result["qa_entries"] = self._list_knowledge_content_locked(cursor, "qa_entries", base_id)
+            for field, table in (("fact_count", "ai_knowledge_facts"), ("source_count", "ai_knowledge_sources"), ("rule_count", "ai_knowledge_rules"), ("qa_count", "ai_knowledge_qa_entries")):
+                cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE knowledge_base_id = ?", (base_id,))
+                result[field] = int(cursor.fetchone()[0] or 0)
+            cursor.execute("SELECT COUNT(*) FROM ai_item_knowledge_bindings WHERE knowledge_base_id = ?", (base_id,))
+            result["binding_count"] = int(cursor.fetchone()[0] or 0)
+            return result
+
+    def update_knowledge_base(self, base_id: str, values: Dict[str, Any], *, expected_version: int) -> Dict[str, Any]:
+        values = dict(values or {})
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                row = self._get_knowledge_base_row(cursor, base_id)
+                current = int(row[4])
+                if expected_version != current: raise KnowledgeVersionConflict(expected_version, current)
+                name = str(values.get("name", row[2])).strip(); description = str(values.get("description", row[3]) or "").strip()
+                if not 1 <= len(name) <= 80: raise ValueError("name must contain 1-80 characters")
+                if len(description) > 500: raise ValueError("description must contain at most 500 characters")
+                enabled = values.get("enabled", bool(row[5]))
+                if not isinstance(enabled, bool): raise ValueError("enabled must be boolean")
+                cursor.execute("UPDATE ai_knowledge_bases SET name=?, description=?, enabled=?, version=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                                (name, description, 1 if enabled else 0, current + 1, base_id))
+                self.conn.commit(); return self.get_knowledge_base(base_id, include_contents=False)
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback(); raise KnowledgeBaseKeyConflict("knowledge base name already exists") from exc
+            except Exception:
+                self.conn.rollback(); raise
+
+    def delete_knowledge_base(self, base_id: str, *, expected_version: int) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                row = self._get_knowledge_base_row(cursor, base_id)
+                if expected_version != int(row[4]): raise KnowledgeVersionConflict(expected_version, int(row[4]))
+                cursor.execute("SELECT COUNT(*) FROM ai_item_knowledge_bindings WHERE knowledge_base_id=?", (base_id,)); binding_count = int(cursor.fetchone()[0] or 0)
+                for table in self._KNOWLEDGE_CONTENT_TABLES.values(): cursor.execute(f"DELETE FROM {table} WHERE knowledge_base_id=?", (base_id,))
+                cursor.execute("DELETE FROM ai_item_knowledge_bindings WHERE knowledge_base_id=?", (base_id,))
+                cursor.execute("DELETE FROM ai_knowledge_bases WHERE id=?", (base_id,))
+                if cursor.rowcount != 1: raise KnowledgeNotFound("knowledge base not found")
+                self.conn.commit(); return {"id": base_id, "name": row[2], "deleted": True, "binding_count": binding_count}
+            except Exception:
+                self.conn.rollback(); raise
+
+    def _list_knowledge_content_locked(self, cursor, kind: str, base_id: str) -> List[Dict[str, Any]]:
+        table = self._KNOWLEDGE_CONTENT_TABLES[kind]
+        cursor.execute(f"SELECT * FROM {table} WHERE knowledge_base_id=? ORDER BY priority DESC, id", (base_id,)) if kind != "sources" else cursor.execute(f"SELECT * FROM {table} WHERE knowledge_base_id=? ORDER BY source_key", (base_id,))
+        return [self._knowledge_content_dict(kind, row) for row in cursor.fetchall()]
+
+    def list_knowledge_content(self, kind: str, base_id: str) -> List[Dict[str, Any]]:
+        if kind not in self._KNOWLEDGE_CONTENT_TABLES: raise ValueError("unsupported knowledge content")
+        with self.lock:
+            cursor = self.conn.cursor(); self._get_knowledge_base_row(cursor, base_id)
+            return self._list_knowledge_content_locked(cursor, kind, base_id)
+
+    def _create_knowledge_content(self, kind: str, base_id: str, values: Dict[str, Any], expected_version: int) -> Dict[str, Any]:
+        if kind not in self._KNOWLEDGE_CONTENT_TABLES: raise ValueError("unsupported knowledge content")
+        values = dict(values or {})
+        self._validate_knowledge_input_fields(kind, values)
+        values = self._validate_knowledge_content_values(kind, values)
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                self._get_knowledge_base_row(cursor, base_id)
+                content_id = self._new_knowledge_id()
+                table = self._KNOWLEDGE_CONTENT_TABLES[kind]
+                cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE knowledge_base_id=?", (base_id,))
+                if int(cursor.fetchone()[0] or 0) >= 200:
+                    raise ValueError(f"{kind} can contain at most 200 entries")
+                total = 0
+                for content_table in self._KNOWLEDGE_CONTENT_TABLES.values():
+                    cursor.execute(f"SELECT COUNT(*) FROM {content_table} WHERE knowledge_base_id=?", (base_id,))
+                    total += int(cursor.fetchone()[0] or 0)
+                if total >= 500:
+                    raise ValueError("knowledge base can contain at most 500 entries")
+                source_ids = self._validate_source_ids(cursor, base_id, values.get("source_ids", []))
+                priority = int(values.get("priority", 0)); enabled = values.get("enabled", True)
+                if not isinstance(enabled, bool): raise ValueError("enabled must be boolean")
+                if kind == "facts":
+                    key = str(values.get("fact_key", "")).strip(); content = str(values.get("content", "")).strip()
+                    if not key or not content: raise ValueError("fact_key and content are required")
+                    cursor.execute("INSERT INTO ai_knowledge_facts(id, knowledge_base_id, fact_key, category, title, content, source_ids, priority, enabled) VALUES (?,?,?,?,?,?,?,?,?)",
+                                    (content_id, base_id, key, str(values.get("category", "product")), str(values.get("title", "")).strip(), content, self._knowledge_encode(source_ids), priority, 1 if enabled else 0))
+                elif kind == "sources":
+                    key = str(values.get("source_key", "")).strip(); title = str(values.get("title", "")).strip()
+                    if not key or not title: raise ValueError("source_key and title are required")
+                    cursor.execute("INSERT INTO ai_knowledge_sources(id, knowledge_base_id, source_key, title, reference, url, notes) VALUES (?,?,?,?,?,?,?)",
+                                    (content_id, base_id, key, title, str(values.get("reference", "")).strip(), str(values.get("url", "")).strip(), str(values.get("notes", "")).strip()))
+                elif kind == "rules":
+                    key = str(values.get("rule_key", "")).strip(); name = str(values.get("name", "")).strip(); rule_type = str(values.get("rule_type", "")).strip()
+                    if not key or not name or not rule_type: raise ValueError("rule_key, name and rule_type are required")
+                    cursor.execute("INSERT INTO ai_knowledge_rules(id, knowledge_base_id, rule_key, name, rule_type, intent, matchers, instruction, response, config_json, source_ids, priority, enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    (content_id, base_id, key, name, rule_type, str(values.get("intent", "general")), self._knowledge_encode(values.get("matchers", [])), str(values.get("instruction", "")), str(values.get("response", "")), json.dumps(values["config_json"], ensure_ascii=False, separators=(",", ":")), self._knowledge_encode(source_ids), priority, 1 if enabled else 0))
+                else:
+                    key = str(values.get("qa_key", "")).strip(); answer = str(values.get("answer", "")).strip()
+                    if not key or not answer: raise ValueError("qa_key and answer are required")
+                    cursor.execute("INSERT INTO ai_knowledge_qa_entries(id, knowledge_base_id, qa_key, category, questions, keywords, answer, source_ids, priority, enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                                    (content_id, base_id, key, str(values.get("category", "general")), self._knowledge_encode(values.get("questions", [])), self._knowledge_encode(values.get("keywords", [])), answer, self._knowledge_encode(source_ids), priority, 1 if enabled else 0))
+                self._bump_knowledge_base(cursor, base_id, expected_version)
+                self.conn.commit()
+                result = self._list_knowledge_content_locked(cursor, kind, base_id)
+                return {**next(item for item in result if item["id"] == content_id), "version": self._get_knowledge_base_row(cursor, base_id)[4]}
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback(); raise KnowledgeBaseKeyConflict("content key already exists") from exc
+            except Exception:
+                self.conn.rollback(); raise
+
+    def _update_knowledge_content(self, kind: str, base_id: str, content_id: str, values: Dict[str, Any], expected_version: int) -> Dict[str, Any]:
+        if kind not in self._KNOWLEDGE_CONTENT_TABLES: raise ValueError("unsupported knowledge content")
+        values = dict(values or {})
+        self._validate_knowledge_input_fields(kind, values)
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                self._get_knowledge_base_row(cursor, base_id)
+                table = self._KNOWLEDGE_CONTENT_TABLES[kind]; cursor.execute(f"SELECT * FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id)); row = cursor.fetchone()
+                if not row: raise KnowledgeNotFound("knowledge content not found")
+                current = self._knowledge_content_dict(kind, row); current.update(values)
+                current = self._validate_knowledge_content_values(kind, current)
+                source_ids = self._validate_source_ids(cursor, base_id, current.get("source_ids", []))
+                if kind == "facts":
+                    cursor.execute("UPDATE ai_knowledge_facts SET fact_key=?, category=?, title=?, content=?, source_ids=?, priority=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                                   (str(current["fact_key"]).strip(), str(current.get("category", "product")), str(current.get("title", "")).strip(), str(current["content"]).strip(), self._knowledge_encode(source_ids), int(current.get("priority", 0)), 1 if current.get("enabled", True) else 0, content_id, base_id))
+                elif kind == "sources":
+                    cursor.execute("UPDATE ai_knowledge_sources SET source_key=?, title=?, reference=?, url=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                                   (str(current["source_key"]).strip(), str(current["title"]).strip(), str(current.get("reference", "")).strip(), str(current.get("url", "")).strip(), str(current.get("notes", "")).strip(), content_id, base_id))
+                elif kind == "rules":
+                    config = current.get("config_json", {}); config = config if isinstance(config, dict) else json.loads(config or "{}")
+                    cursor.execute("UPDATE ai_knowledge_rules SET rule_key=?, name=?, rule_type=?, intent=?, matchers=?, instruction=?, response=?, config_json=?, source_ids=?, priority=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                                   (str(current["rule_key"]).strip(), str(current["name"]).strip(), str(current["rule_type"]).strip(), str(current.get("intent", "general")), self._knowledge_encode(current.get("matchers", [])), str(current.get("instruction", "")), str(current.get("response", "")), json.dumps(config, ensure_ascii=False, separators=(",", ":")), self._knowledge_encode(source_ids), int(current.get("priority", 0)), 1 if current.get("enabled", True) else 0, content_id, base_id))
+                else:
+                    cursor.execute("UPDATE ai_knowledge_qa_entries SET qa_key=?, category=?, questions=?, keywords=?, answer=?, source_ids=?, priority=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                                   (str(current["qa_key"]).strip(), str(current.get("category", "general")), self._knowledge_encode(current.get("questions", [])), self._knowledge_encode(current.get("keywords", [])), str(current["answer"]).strip(), self._knowledge_encode(source_ids), int(current.get("priority", 0)), 1 if current.get("enabled", True) else 0, content_id, base_id))
+                self._bump_knowledge_base(cursor, base_id, expected_version); self.conn.commit()
+                result = next(item for item in self._list_knowledge_content_locked(cursor, kind, base_id) if item["id"] == content_id)
+                return {**result, "version": self._get_knowledge_base_row(cursor, base_id)[4]}
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback(); raise KnowledgeBaseKeyConflict("content key already exists") from exc
+            except Exception:
+                self.conn.rollback(); raise
+
+    def _delete_knowledge_content(self, kind: str, base_id: str, content_id: str, expected_version: int) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                self._get_knowledge_base_row(cursor, base_id); table = self._KNOWLEDGE_CONTENT_TABLES[kind]
+                cursor.execute(f"SELECT * FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id)); row = cursor.fetchone()
+                if not row: raise KnowledgeNotFound("knowledge content not found")
+                if kind == "sources":
+                    for ref_table in ("ai_knowledge_facts", "ai_knowledge_rules", "ai_knowledge_qa_entries"):
+                        cursor.execute(f"SELECT source_ids FROM {ref_table} WHERE knowledge_base_id=?", (base_id,))
+                        if any(content_id in self._knowledge_list(r[0]) for r in cursor.fetchall()):
+                            raise KnowledgeSourceInUse("source is still referenced")
+                cursor.execute(f"DELETE FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id)); self._bump_knowledge_base(cursor, base_id, expected_version); self.conn.commit()
+                return {"id": content_id, "deleted": True, "version": self._get_knowledge_base_row(cursor, base_id)[4]}
+            except Exception:
+                self.conn.rollback(); raise
+
+    def create_knowledge_fact(self, base_id, values, *, expected_version): return self._create_knowledge_content("facts", base_id, values, expected_version)
+    def update_knowledge_fact(self, base_id, content_id, values, *, expected_version): return self._update_knowledge_content("facts", base_id, content_id, values, expected_version)
+    def delete_knowledge_fact(self, base_id, content_id, *, expected_version): return self._delete_knowledge_content("facts", base_id, content_id, expected_version)
+    def list_knowledge_facts(self, base_id): return self.list_knowledge_content("facts", base_id)
+    def create_knowledge_source(self, base_id, values, *, expected_version): return self._create_knowledge_content("sources", base_id, values, expected_version)
+    def update_knowledge_source(self, base_id, content_id, values, *, expected_version): return self._update_knowledge_content("sources", base_id, content_id, values, expected_version)
+    def delete_knowledge_source(self, base_id, content_id, *, expected_version): return self._delete_knowledge_content("sources", base_id, content_id, expected_version)
+    def list_knowledge_sources(self, base_id): return self.list_knowledge_content("sources", base_id)
+    def create_knowledge_rule(self, base_id, values, *, expected_version): return self._create_knowledge_content("rules", base_id, values, expected_version)
+    def update_knowledge_rule(self, base_id, content_id, values, *, expected_version): return self._update_knowledge_content("rules", base_id, content_id, values, expected_version)
+    def delete_knowledge_rule(self, base_id, content_id, *, expected_version): return self._delete_knowledge_content("rules", base_id, content_id, expected_version)
+    def list_knowledge_rules(self, base_id): return self.list_knowledge_content("rules", base_id)
+    def create_knowledge_qa_entry(self, base_id, values, *, expected_version): return self._create_knowledge_content("qa_entries", base_id, values, expected_version)
+    def update_knowledge_qa_entry(self, base_id, content_id, values, *, expected_version): return self._update_knowledge_content("qa_entries", base_id, content_id, values, expected_version)
+    def delete_knowledge_qa_entry(self, base_id, content_id, *, expected_version): return self._delete_knowledge_content("qa_entries", base_id, content_id, expected_version)
+    def list_knowledge_qa_entries(self, base_id): return self.list_knowledge_content("qa_entries", base_id)
+
+    def list_item_knowledge_bindings(self, cookie_id: str, item_id: str) -> List[Dict[str, Any]]:
+        self._ensure_global_knowledge_v2_migrated()
+        with self.lock:
+            cursor = self.conn.cursor(); cursor.execute("""SELECT b.cookie_id,b.item_id,b.knowledge_base_id,b.sort_order,b.created_at,
+                k.base_key,k.name,k.description,k.version,k.enabled,k.schema_version,k.seed_version,k.checksum
+                FROM ai_item_knowledge_bindings b JOIN ai_knowledge_bases k ON k.id=b.knowledge_base_id
+                WHERE b.cookie_id=? AND b.item_id=? ORDER BY b.sort_order,k.base_key""", (cookie_id, item_id))
+            return [{"cookie_id": r[0], "item_id": r[1], "knowledge_base_id": r[2], "sort_order": int(r[3]), "created_at": r[4], "base_key": r[5], "name": r[6], "description": r[7], "version": int(r[8]), "enabled": bool(r[9]), "schema_version": int(r[10]), "seed_version": r[11], "checksum": r[12] or ""} for r in cursor.fetchall()]
+
+    def add_item_knowledge_binding(self, cookie_id: str, item_id: str, base_id: str, sort_order: Optional[int] = None) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                self._get_knowledge_base_row(cursor, base_id)
+                cursor.execute("SELECT 1 FROM item_info WHERE cookie_id=? AND item_id=?", (cookie_id, item_id))
+                if not cursor.fetchone(): raise KnowledgeNotFound("item not found")
+                cursor.execute("SELECT 1 FROM ai_item_knowledge_bindings WHERE cookie_id=? AND item_id=? AND knowledge_base_id=?", (cookie_id, item_id, base_id))
+                if cursor.fetchone(): raise KnowledgeBindingConflict("knowledge base already bound")
+                if sort_order is None:
+                    cursor.execute("SELECT COALESCE(MAX(sort_order), -1)+1 FROM ai_item_knowledge_bindings WHERE cookie_id=? AND item_id=?", (cookie_id, item_id)); sort_order = int(cursor.fetchone()[0])
+                cursor.execute("INSERT INTO ai_item_knowledge_bindings(cookie_id,item_id,knowledge_base_id,sort_order) VALUES (?,?,?,?)", (cookie_id,item_id,base_id,int(sort_order)))
+                self.conn.commit(); return next(item for item in self.list_item_knowledge_bindings(cookie_id,item_id) if item["knowledge_base_id"] == base_id)
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback(); raise KnowledgeBindingConflict("knowledge base already bound") from exc
+            except Exception:
+                self.conn.rollback(); raise
+
+    def delete_item_knowledge_binding(self, cookie_id: str, item_id: str, base_id: str) -> bool:
+        with self.lock:
+            cursor = self.conn.cursor(); cursor.execute("DELETE FROM ai_item_knowledge_bindings WHERE cookie_id=? AND item_id=? AND knowledge_base_id=?", (cookie_id,item_id,base_id)); deleted = cursor.rowcount > 0; self.conn.commit(); return deleted
+
+    def get_ai_reply_profile(self) -> Dict[str, Any]:
+        default = "语气自然、友好，略带俏皮，像真实的闲鱼卖家。优先用一到两句短句直接回答，可少量使用语气词；不要复述规则，不主动扩展买家没有询问的内容，避免客服腔、夸张承诺和连续表情。"
+        with self.lock:
+            cursor = self.conn.cursor(); cursor.execute("SELECT profile_key,reply_style,version,created_at,updated_at FROM ai_reply_profile WHERE profile_key='default'"); row = cursor.fetchone()
+            if not row:
+                cursor.execute("INSERT INTO ai_reply_profile(profile_key,reply_style,version) VALUES ('default',?,1)", (default,)); self.conn.commit(); return {"profile_key":"default","reply_style":default,"version":1,"created_at":None,"updated_at":None}
+            return {"profile_key": row[0], "reply_style": row[1], "version": int(row[2]), "created_at": row[3], "updated_at": row[4]}
+
+    def update_ai_reply_profile(self, reply_style: str, *, expected_version: int) -> Dict[str, Any]:
+        text = str(reply_style or "").strip()
+        if not 1 <= len(text) <= 1000: raise ValueError("reply_style must contain 1-1000 characters")
+        lowered = text.lower()
+        if any(term in lowered for term in GLOBAL_REPLY_STYLE_FORBIDDEN_TERMS) or text.startswith(("{", "[")):
+            raise ValueError("reply_style can only describe tone, length, and expression habits")
+        with self.lock:
+            cursor = self.conn.cursor(); current = self.get_ai_reply_profile();
+            if expected_version != current["version"]: raise KnowledgeVersionConflict(expected_version, current["version"])
+            cursor.execute("UPDATE ai_reply_profile SET reply_style=?,version=?,updated_at=CURRENT_TIMESTAMP WHERE profile_key='default'", (text,current["version"]+1)); self.conn.commit(); return self.get_ai_reply_profile()
+
+    def migrate_global_knowledge_v2(self, seed_path: Optional[str] = None, *,
+                                    target_item_id: str = "1081710901648",
+                                    target_cookie_id: Optional[str] = None) -> Dict[str, Any]:
+        """把已审计 Passistant seed 一次性迁入全局库；marker 与数据同事务提交。"""
+        migration_key = "global-knowledge-v2-passistant-20260907"
+        path = Path(seed_path) if seed_path else Path(__file__).resolve().parent / "knowledge" / "passistant_v2.json"
+        if not path.exists():
+            raise MigrationPrecondition("Passistant v2 seed is missing")
+        try:
+            v2 = json.loads(path.read_text(encoding="utf-8"))
+            source_seed = path.parent / str(v2.get("source_seed", "passistant_public_v1.json"))
+            v1 = json.loads(source_seed.read_text(encoding="utf-8")) if source_seed.exists() else {"entries": []}
+            entries = list(v1.get("entries") or v2.get("entries") or [])
+            if len(entries) != 20:
+                raise MigrationPrecondition("Passistant seed must contain 20 public entries")
+            rules = [
+                self._validate_knowledge_content_values("rules", rule)
+                for rule in list(v2.get("rules") or [])
+            ]
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise MigrationPrecondition("Passistant seed cannot be read") from exc
+        details_checksum = hashlib.sha256(json.dumps({"v2": v2, "entries": entries}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT details_checksum FROM ai_knowledge_migrations WHERE migration_key=?", (migration_key,))
+            marker = cursor.fetchone()
+            if marker:
+                return {"migration_key": migration_key, "applied": False, "details_checksum": marker[0]}
+            if target_cookie_id is None:
+                cursor.execute("SELECT DISTINCT cookie_id FROM item_info WHERE item_id=? ORDER BY cookie_id", (target_item_id,))
+                item_rows = cursor.fetchall()
+                if len(item_rows) > 1:
+                    raise MigrationPrecondition("target Passistant item belongs to multiple accounts")
+                target_cookie_id = item_rows[0][0] if item_rows else None
+            if not target_cookie_id:
+                raise MigrationPrecondition("target Passistant item is missing")
+            cursor.execute("SELECT 1 FROM item_info WHERE cookie_id=? AND item_id=?", (target_cookie_id, target_item_id))
+            if not cursor.fetchone(): raise MigrationPrecondition("target Passistant item is missing")
+            try:
+                cursor.execute("SELECT id FROM ai_knowledge_bases WHERE base_key='passistant'")
+                if cursor.fetchone(): raise MigrationPrecondition("passistant base key already exists without migration marker")
+                base_id = self._new_knowledge_id()
+                cursor.execute("INSERT INTO ai_knowledge_bases(id,base_key,name,description,version,enabled,schema_version,seed_version,checksum) VALUES (?,?,?,?,1,1,2,?,?)",
+                               (base_id, "passistant", "Passistant", v2.get("description", ""), v2.get("seed_version", "passistant-global-v2"), details_checksum))
+                source_ids = {}
+                refs = []
+                for entry in entries:
+                    refs.extend(entry.get("source_refs", []))
+                for index, reference in enumerate(dict.fromkeys(str(ref).strip() for ref in refs if str(ref).strip())):
+                    sid = self._new_knowledge_id(); source_ids[reference] = sid
+                    cursor.execute("INSERT INTO ai_knowledge_sources(id,knowledge_base_id,source_key,title,reference) VALUES (?,?,?,?,?)",
+                                   (sid, base_id, f"seed-source-{index + 1}", reference[:120], reference))
+                for entry in entries:
+                    refs_json = self._knowledge_encode([source_ids[ref] for ref in entry.get("source_refs", []) if ref in source_ids])
+                    qa_id = self._new_knowledge_id()
+                    cursor.execute("INSERT INTO ai_knowledge_qa_entries(id,knowledge_base_id,qa_key,category,questions,keywords,answer,source_ids,priority,enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                                   (qa_id, base_id, entry["knowledge_key"], entry.get("category", "general"), self._knowledge_encode(entry.get("question_patterns", [])), self._knowledge_encode(entry.get("keywords", [])), entry.get("answer", ""), refs_json, int(entry.get("priority", 0)), 1 if entry.get("enabled", True) else 0))
+                    if entry.get("knowledge_key") in {"product.overview", "pricing.current-promotion", "region.supported", "install.runtime", "activation.monthly-code"}:
+                        fact_id = self._new_knowledge_id()
+                        cursor.execute("INSERT INTO ai_knowledge_facts(id,knowledge_base_id,fact_key,category,title,content,source_ids,priority,enabled) VALUES (?,?,?,?,?,?,?,?,?)",
+                                       (fact_id, base_id, f"fact.{entry['knowledge_key']}", entry.get("category", "product"), entry["knowledge_key"], entry.get("answer", ""), refs_json, int(entry.get("priority", 0)), 1 if entry.get("enabled", True) else 0))
+                for rule in rules:
+                    cursor.execute("INSERT INTO ai_knowledge_rules(id,knowledge_base_id,rule_key,name,rule_type,intent,matchers,instruction,response,config_json,source_ids,priority,enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                   (self._new_knowledge_id(), base_id, rule["rule_key"], rule.get("name", rule["rule_key"]), rule["rule_type"], rule.get("intent", "general"), self._knowledge_encode(rule.get("matchers", [])), rule.get("instruction", ""), rule.get("response", ""), json.dumps(rule.get("config_json", {}), ensure_ascii=False, separators=(",", ":")), "[]", int(rule.get("priority", 0)), 1))
+                cursor.execute("UPDATE ai_knowledge_bases SET checksum=? WHERE id=?", (self._refresh_knowledge_base_checksum(cursor, base_id), base_id))
+                cursor.execute("INSERT INTO ai_item_knowledge_bindings(cookie_id,item_id,knowledge_base_id,sort_order) VALUES (?,?,?,0)", (target_cookie_id, target_item_id, base_id))
+                cursor.execute("INSERT INTO ai_knowledge_migrations(migration_key,details_checksum) VALUES (?,?)", (migration_key, details_checksum))
+                self.conn.commit()
+                return {"migration_key": migration_key, "applied": True, "knowledge_base_id": base_id, "cookie_id": target_cookie_id, "item_id": target_item_id, "details_checksum": details_checksum}
+            except Exception:
+                self.conn.rollback(); raise
+
+    def ensure_global_knowledge_trial_v1(self, seed_path: Optional[str] = None) -> Dict[str, Any]:
+        """把新增的 Passistant 试用规则补入已完成 v2 迁移的全局库。"""
+        migration_key = "global-knowledge-trial-v1-passistant-20260908"
+        path = Path(seed_path) if seed_path else Path(__file__).resolve().parent / "knowledge" / "passistant_v2.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            trial_rule = next(
+                rule for rule in list(payload.get("rules") or [])
+                if rule.get("rule_key") == "trial.five-minute"
+            )
+            trial_rule = self._validate_knowledge_content_values("rules", trial_rule)
+        except (OSError, ValueError, json.JSONDecodeError, StopIteration) as exc:
+            raise MigrationPrecondition("Passistant trial rule is missing or invalid") from exc
+        details_checksum = hashlib.sha256(
+            json.dumps(trial_rule, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT details_checksum FROM ai_knowledge_migrations WHERE migration_key=?", (migration_key,))
+            marker = cursor.fetchone()
+            if marker:
+                return {"migration_key": migration_key, "applied": False, "details_checksum": marker[0]}
+            cursor.execute("SELECT id FROM ai_knowledge_bases WHERE base_key='passistant'")
+            base_row = cursor.fetchone()
+            if not base_row:
+                return {"migration_key": migration_key, "applied": False, "details_checksum": details_checksum}
+            base_id = base_row[0]
+            cursor.execute("SELECT id FROM ai_knowledge_rules WHERE knowledge_base_id=? AND rule_key=?", (base_id, "trial.five-minute"))
+            existing = cursor.fetchone()
+            try:
+                if existing:
+                    cursor.execute("INSERT INTO ai_knowledge_migrations(migration_key,details_checksum) VALUES (?,?)", (migration_key, details_checksum))
+                    self.conn.commit()
+                    return {"migration_key": migration_key, "applied": False, "details_checksum": details_checksum}
+                cursor.execute(
+                    "INSERT INTO ai_knowledge_rules(id,knowledge_base_id,rule_key,name,rule_type,intent,matchers,instruction,response,config_json,source_ids,priority,enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        self._new_knowledge_id(), base_id, trial_rule["rule_key"], trial_rule["name"],
+                        trial_rule["rule_type"], trial_rule.get("intent", "trial"),
+                        self._knowledge_encode(trial_rule["matchers"]), trial_rule.get("instruction", ""),
+                        trial_rule["response"], json.dumps(trial_rule.get("config_json", {}), ensure_ascii=False, separators=(",", ":")),
+                        self._knowledge_encode(trial_rule.get("source_ids", [])), int(trial_rule.get("priority", 0)),
+                        1 if trial_rule.get("enabled", True) else 0,
+                    ),
+                )
+                row = self._get_knowledge_base_row(cursor, base_id)
+                self._bump_knowledge_base(cursor, base_id, int(row[4]))
+                cursor.execute("INSERT INTO ai_knowledge_migrations(migration_key,details_checksum) VALUES (?,?)", (migration_key, details_checksum))
+                self.conn.commit()
+                return {"migration_key": migration_key, "applied": True, "knowledge_base_id": base_id, "details_checksum": details_checksum}
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    def ensure_global_knowledge_usage_trial_v1(self, seed_path: Optional[str] = None) -> Dict[str, Any]:
+        """把“怎么用”中的官网注册试用提示补入已完成 v2 迁移的全局库。"""
+        migration_key = "global-knowledge-usage-trial-v1-passistant-20260908"
+        path = Path(seed_path) if seed_path else Path(__file__).resolve().parent / "knowledge" / "passistant_v2.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            source_seed = path.parent / str(payload.get("source_seed", "passistant_public_v1.json"))
+            public_seed = json.loads(source_seed.read_text(encoding="utf-8"))
+            usage_entry = next(
+                entry for entry in list(public_seed.get("entries") or [])
+                if entry.get("knowledge_key") == "install.runtime"
+            )
+            if not isinstance(usage_entry.get("answer"), str) or not usage_entry["answer"].strip():
+                raise ValueError("Passistant usage entry is invalid")
+        except (OSError, ValueError, json.JSONDecodeError, StopIteration) as exc:
+            raise MigrationPrecondition("Passistant usage trial guidance is missing or invalid") from exc
+        details_checksum = hashlib.sha256(
+            json.dumps(usage_entry, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT details_checksum FROM ai_knowledge_migrations WHERE migration_key=?",
+                (migration_key,),
+            )
+            marker = cursor.fetchone()
+            if marker:
+                return {"migration_key": migration_key, "applied": False, "details_checksum": marker[0]}
+
+            cursor.execute("SELECT id, version FROM ai_knowledge_bases WHERE base_key='passistant'")
+            base_row = cursor.fetchone()
+            if not base_row:
+                return {"migration_key": migration_key, "applied": False, "details_checksum": details_checksum}
+
+            base_id, base_version = base_row
+            try:
+                source_ids = []
+                changed = False
+                for reference in usage_entry.get("source_refs", []):
+                    cursor.execute(
+                        "SELECT id FROM ai_knowledge_sources WHERE knowledge_base_id=? AND reference=? ORDER BY id LIMIT 1",
+                        (base_id, str(reference).strip()),
+                    )
+                    source_row = cursor.fetchone()
+                    if source_row:
+                        source_ids.append(source_row[0])
+                        continue
+                    source_id = self._new_knowledge_id()
+                    source_key = f"seed-source-{hashlib.sha256(str(reference).encode('utf-8')).hexdigest()[:12]}"
+                    cursor.execute(
+                        "INSERT INTO ai_knowledge_sources(id,knowledge_base_id,source_key,title,reference) VALUES (?,?,?,?,?)",
+                        (source_id, base_id, source_key, str(reference)[:120], str(reference)),
+                    )
+                    source_ids.append(source_id)
+                    changed = True
+
+                cursor.execute(
+                    "SELECT id, questions, keywords, answer, source_ids FROM ai_knowledge_qa_entries WHERE knowledge_base_id=? AND qa_key=?",
+                    (base_id, "install.runtime"),
+                )
+                qa_row = cursor.fetchone()
+                if qa_row:
+                    merged_source_ids = list(dict.fromkeys([*self._knowledge_list(qa_row[4]), *source_ids]))
+                    next_questions = list(usage_entry.get("question_patterns", []))
+                    next_keywords = list(usage_entry.get("keywords", []))
+                    next_answer = usage_entry["answer"].strip()
+                    if (
+                        self._knowledge_list(qa_row[1]) != next_questions
+                        or self._knowledge_list(qa_row[2]) != next_keywords
+                        or qa_row[3] != next_answer
+                        or self._knowledge_list(qa_row[4]) != merged_source_ids
+                    ):
+                        cursor.execute(
+                            "UPDATE ai_knowledge_qa_entries SET questions=?, keywords=?, answer=?, source_ids=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                            (
+                                self._knowledge_encode(next_questions),
+                                self._knowledge_encode(next_keywords),
+                                next_answer,
+                                self._knowledge_encode(merged_source_ids),
+                                qa_row[0],
+                                base_id,
+                            ),
+                        )
+                        changed = True
+
+                cursor.execute(
+                    "SELECT id, content, source_ids FROM ai_knowledge_facts WHERE knowledge_base_id=? AND fact_key=?",
+                    (base_id, "fact.install.runtime"),
+                )
+                fact_row = cursor.fetchone()
+                if fact_row:
+                    merged_source_ids = list(dict.fromkeys([*self._knowledge_list(fact_row[2]), *source_ids]))
+                    next_content = usage_entry["answer"].strip()
+                    if fact_row[1] != next_content or self._knowledge_list(fact_row[2]) != merged_source_ids:
+                        cursor.execute(
+                            "UPDATE ai_knowledge_facts SET content=?, source_ids=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND knowledge_base_id=?",
+                            (next_content, self._knowledge_encode(merged_source_ids), fact_row[0], base_id),
+                        )
+                        changed = True
+
+                if changed:
+                    self._bump_knowledge_base(cursor, base_id, int(base_version))
+                cursor.execute(
+                    "INSERT INTO ai_knowledge_migrations(migration_key,details_checksum) VALUES (?,?)",
+                    (migration_key, details_checksum),
+                )
+                self.conn.commit()
+                return {
+                    "migration_key": migration_key,
+                    "applied": changed,
+                    "knowledge_base_id": base_id,
+                    "details_checksum": details_checksum,
+                }
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    def _ensure_global_knowledge_v2_migrated(self) -> None:
+        """目标商品出现后惰性执行一次迁移；marker 可防止用户删除后重建。"""
+        migration_key = "global-knowledge-v2-passistant-20260907"
+        target_item_id = "1081710901648"
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM ai_knowledge_migrations WHERE migration_key=?",
+                (migration_key,),
+            )
+            marker_exists = cursor.fetchone() is not None
+            cursor.execute("SELECT 1 FROM item_info WHERE item_id=? LIMIT 1", (target_item_id,))
+            target_exists = cursor.fetchone() is not None
+        if not marker_exists and target_exists:
+            try:
+                self.migrate_global_knowledge_v2()
+            except MigrationPrecondition as exc:
+                logger.debug(f"Passistant 全局知识迁移尚不满足条件: {exc}")
+        try:
+            self.ensure_global_knowledge_trial_v1()
+        except MigrationPrecondition as exc:
+            logger.debug(f"Passistant 试用规则迁移尚不满足条件: {exc}")
+        try:
+            self.ensure_global_knowledge_usage_trial_v1()
+        except MigrationPrecondition as exc:
+            logger.debug(f"Passistant 怎么用试用提示迁移尚不满足条件: {exc}")
+
+    def delete_ai_conversation_chat(self, chat_id: str, cookie_id: str) -> int:
+        """删除一次性 AI 测试会话，避免测试消息进入买家上下文。"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "DELETE FROM ai_conversations WHERE chat_id = ? AND cookie_id = ?",
+                (chat_id, cookie_id),
+            )
+            deleted = cursor.rowcount
+            self.conn.commit()
+            return deleted
 
     def update_item_multi_spec_status(self, cookie_id: str, item_id: str, is_multi_spec: bool) -> bool:
         """更新商品的多规格状态"""
@@ -5904,6 +7320,20 @@ class DBManager:
                     'DELETE FROM item_delivery_configs WHERE cookie_id = ? AND item_id = ?',
                     (cookie_id, item_id),
                 )
+                # 即使历史数据库未启用 SQLite foreign_keys，也显式清理知识文档，
+                # 避免商品删除后留下可被检索的孤儿条目。
+                cursor.execute(
+                    'DELETE FROM ai_product_knowledge_entries WHERE cookie_id = ? AND item_id = ?',
+                    (cookie_id, item_id),
+                )
+                cursor.execute(
+                    'DELETE FROM ai_product_knowledge_documents WHERE cookie_id = ? AND item_id = ?',
+                    (cookie_id, item_id),
+                )
+                cursor.execute(
+                    'DELETE FROM ai_item_knowledge_bindings WHERE cookie_id = ? AND item_id = ?',
+                    (cookie_id, item_id),
+                )
                 cursor.execute('DELETE FROM item_info WHERE cookie_id = ? AND item_id = ?',
                              (cookie_id, item_id))
 
@@ -5962,6 +7392,10 @@ class DBManager:
                         )
                         cursor.execute(
                             'DELETE FROM item_delivery_configs WHERE cookie_id = ? AND item_id = ?',
+                            (cookie_id, item_id),
+                        )
+                        cursor.execute(
+                            'DELETE FROM ai_item_knowledge_bindings WHERE cookie_id = ? AND item_id = ?',
                             (cookie_id, item_id),
                         )
                         cursor.execute('DELETE FROM item_info WHERE cookie_id = ? AND item_id = ?',
@@ -6130,6 +7564,13 @@ class DBManager:
 
                 # 4. 删除用户的通知渠道
                 cursor.execute('DELETE FROM notification_channels WHERE user_id = ?', (user_id,))
+
+                # 商品知识库是全局资源，只删除该用户商品的绑定关系。
+                cursor.execute(
+                    'DELETE FROM ai_item_knowledge_bindings WHERE cookie_id IN '
+                    '(SELECT id FROM cookies WHERE user_id = ?)',
+                    (user_id,),
+                )
 
                 # 5. 删除用户的Cookie
                 cursor.execute('DELETE FROM cookies WHERE user_id = ?', (user_id,))

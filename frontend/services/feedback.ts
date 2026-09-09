@@ -38,6 +38,27 @@ export const notify = (message: unknown, type?: FeedbackType) => {
   }));
 };
 
+export const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  const candidate = error as {
+    response?: { data?: { detail?: unknown } };
+    message?: unknown;
+  };
+  const detail = candidate?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => item && typeof item === 'object' ? (item as { msg?: unknown }).msg : '')
+      .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()));
+    if (messages.length) return messages.join('；');
+  }
+  const generic = typeof candidate?.message === 'string' ? candidate.message.trim() : '';
+  return generic && !/status code \d+/i.test(generic) ? generic : fallback;
+};
+
 export const confirmAction = (
   message: string,
   options: Partial<Pick<ConfirmEventDetail, 'title' | 'confirmLabel' | 'cancelLabel' | 'danger'>> = {},

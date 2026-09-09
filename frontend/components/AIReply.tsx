@@ -11,12 +11,15 @@ import {
   Save,
   ShieldCheck,
 } from 'lucide-react';
-import { AccountDetail, AIReplySettings } from '../types';
+import { AccountDetail, AIReplySettings, AIReplyStyle, Item } from '../types';
 import {
   getAccountAISettings,
   getAccountDetails,
+  getItems,
+  getAIReplyStyle,
   testAIConnection,
   updateAccountAISettings,
+  updateAIReplyStyle,
 } from '../services/api';
 import { notify } from '../services/feedback';
 import { EmptyState, PageHeader, PageLoading, SectionHeader } from './ui';
@@ -32,18 +35,18 @@ const defaultSettings: AIReplySettings = {
   api_key_configured: false,
   base_url: FREE_TOKEN_BASE_URL,
   user_agent: 'codex_cli_rs/0.0.0 (Hermes Agent)',
-  max_discount_percent: 10,
-  max_discount_amount: 100,
-  max_bargain_rounds: 3,
   context_enabled: true,
   context_message_limit: 12,
   context_expire_minutes: 120,
-  custom_prompts: '',
 };
+
+const defaultReplyStyle = '语气自然、友好，略带俏皮，像真实的闲鱼卖家。优先用一到两句短句直接回答，可少量使用语气词；不要复述规则，不主动扩展买家没有询问的内容，避免客服腔、夸张承诺和连续表情。';
 
 const AIReply: React.FC = () => {
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState('');
   const [settings, setSettings] = useState<AIReplySettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,21 +54,43 @@ const AIReply: React.FC = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [testMessage, setTestMessage] = useState('你好，这个商品现在还能买吗？');
   const [testReply, setTestReply] = useState('');
+  const [replyStyle, setReplyStyle] = useState(defaultReplyStyle);
+  const [replyStyleVersion, setReplyStyleVersion] = useState(1);
+  const [styleSaving, setStyleSaving] = useState(false);
 
   const selectedAccount = useMemo(
     () => accounts.find(account => account.id === selectedAccountId),
     [accounts, selectedAccountId],
   );
+  const availableItems = useMemo(
+    () => items.filter(item => item.cookie_id === selectedAccountId),
+    [items, selectedAccountId],
+  );
 
   useEffect(() => {
-    getAccountDetails()
-      .then(data => {
+    Promise.all([getAccountDetails(), getItems()])
+      .then(([data, itemData]) => {
         setAccounts(data);
+        setItems(itemData);
         setSelectedAccountId(data[0]?.id || '');
+        setSelectedItemId(itemData.find(item => item.cookie_id === data[0]?.id)?.item_id || '');
       })
       .catch(error => notify(error instanceof Error ? error.message : '账号加载失败', 'error'))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    getAIReplyStyle()
+      .then((data: AIReplyStyle) => {
+        setReplyStyle(data.reply_style || defaultReplyStyle);
+        setReplyStyleVersion(data.version);
+      })
+      .catch(error => notify(error instanceof Error ? error.message : '回复风格加载失败', 'error'));
+  }, []);
+
+  useEffect(() => {
+    setSelectedItemId(availableItems[0]?.item_id || '');
+  }, [selectedAccountId, availableItems]);
 
   useEffect(() => {
     if (!selectedAccountId) return;
@@ -106,8 +131,8 @@ const AIReply: React.FC = () => {
   };
 
   const handleTest = async () => {
-    if (!selectedAccountId || !testMessage.trim()) {
-      notify('请选择账号并输入测试消息', 'warning');
+    if (!selectedAccountId || !selectedItemId || !testMessage.trim()) {
+      notify('请选择账号、真实商品并输入测试消息', 'warning');
       return;
     }
     setTesting(true);
@@ -115,9 +140,7 @@ const AIReply: React.FC = () => {
     try {
       const result = await testAIConnection(selectedAccountId, {
         message: testMessage.trim(),
-        item_title: '测试商品',
-        item_price: 100,
-        item_desc: '仅用于测试人工智能回复，不会发送到闲鱼。',
+        item_id: selectedItemId,
       });
       setTestReply(result.reply || result.message || '测试完成');
       notify('AI回复测试完成', 'success');
@@ -125,6 +148,24 @@ const AIReply: React.FC = () => {
       notify(error instanceof Error ? error.message : 'AI回复测试失败', 'error');
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleSaveStyle = async () => {
+    if (!replyStyle.trim()) {
+      notify('回复风格不能为空', 'warning');
+      return;
+    }
+    setStyleSaving(true);
+    try {
+      const data = await updateAIReplyStyle(replyStyleVersion, replyStyle.trim());
+      setReplyStyle(data.reply_style);
+      setReplyStyleVersion(data.version);
+      notify('全局回复风格已保存', 'success');
+    } catch (error: any) {
+      notify(error?.response?.status === 409 ? '回复风格版本已变化，请重新加载' : (error instanceof Error ? error.message : '回复风格保存失败'), 'error');
+    } finally {
+      setStyleSaving(false);
     }
   };
 
@@ -136,7 +177,7 @@ const AIReply: React.FC = () => {
     <div className="page-stack animate-fade-in">
       <PageHeader
         title="AI 回复"
-        description="按账号配置模型连接、上下文记忆、议价边界和业务回复规则。"
+        description="按账号配置模型连接和上下文记忆；商品业务规则请在知识库中维护。"
         icon={Bot}
         actions={(
           <div className="flex min-w-0 flex-wrap items-end gap-2">
@@ -290,52 +331,18 @@ const AIReply: React.FC = () => {
 
               <section className="section-panel">
                 <SectionHeader
-                  title="回复策略"
-                  description="约束议价空间，并补充账号专属的语气、承诺和售后规则。"
+                  title="全局回复风格"
+                  description="适用于所有账号和商品，只描述语气、篇幅与表达习惯；商品业务规则请放到对应知识库。"
                   icon={MessageSquareText}
                 />
-                <div className="grid gap-4 p-5 sm:grid-cols-3">
-                  <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">最大折扣比例</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={settings.max_discount_percent}
-                      onChange={event => updateSetting('max_discount_percent', Number(event.target.value))}
-                      className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
-                    />
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">最大折扣金额</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={settings.max_discount_amount ?? 0}
-                      onChange={event => updateSetting('max_discount_amount', Number(event.target.value))}
-                      className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
-                    />
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">最大议价轮次</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={settings.max_bargain_rounds}
-                      onChange={event => updateSetting('max_bargain_rounds', Number(event.target.value))}
-                      className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
-                    />
-                  </label>
-                  <label className="sm:col-span-3">
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">回复风格与业务规则</span>
-                    <textarea
-                      value={settings.custom_prompts}
-                      onChange={event => updateSetting('custom_prompts', event.target.value)}
-                      className="ios-input min-h-36 w-full resize-y rounded-md px-3 py-2.5 text-sm leading-6"
-                      placeholder="例如：语气简洁，不承诺未确认的库存；涉及售后时引导买家说明订单号。"
-                    />
-                  </label>
+                <div className="p-5">
+                  <textarea value={replyStyle} onChange={event => setReplyStyle(event.target.value)} className="ios-input min-h-32 w-full resize-y rounded-md px-3 py-2.5 text-sm leading-6" placeholder={defaultReplyStyle} />
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs leading-5 text-gray-500">示例：自然、友好、略带俏皮；一到两句短答；不夸张承诺、不连续使用表情。</p>
+                    <button type="button" onClick={() => void handleSaveStyle()} disabled={styleSaving} className="ios-btn-secondary flex items-center gap-2 rounded-md px-3 py-2 text-sm">
+                      {styleSaving && <Loader2 className="h-4 w-4 animate-spin" />}保存回复风格
+                    </button>
+                  </div>
                 </div>
               </section>
 
@@ -399,6 +406,20 @@ const AIReply: React.FC = () => {
                   icon={Play}
                 />
                 <div className="p-5">
+                  <label className="mb-3 block">
+                    <span className="mb-1.5 block text-xs font-semibold text-gray-600">测试商品（使用真实商品事实）</span>
+                    <select
+                      value={selectedItemId}
+                      onChange={event => setSelectedItemId(event.target.value)}
+                      className="ios-input w-full rounded-md px-3 py-2 text-sm"
+                    >
+                      {availableItems.map(item => (
+                        <option key={item.item_id} value={item.item_id}>
+                          {item.item_title || item.item_id} · {item.item_price || '未定价'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <textarea
                     value={testMessage}
                     onChange={event => setTestMessage(event.target.value)}
@@ -407,7 +428,7 @@ const AIReply: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleTest}
-                    disabled={testing || !settings.ai_enabled}
+                    disabled={testing || !settings.ai_enabled || !selectedItemId}
                     className="ios-btn-primary mt-3 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
                   >
                     {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}

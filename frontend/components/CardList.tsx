@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '../types';
 import { getCards, createCard, updateCard, deleteCard } from '../services/api';
-import { confirmAction, notify } from '../services/feedback';
+import { confirmAction, getApiErrorMessage, notify } from '../services/feedback';
 import { Plus, CreditCard, FileText, Image as ImageIcon, Code, Edit, Trash2, Save, X, Package, Boxes } from 'lucide-react';
 import { EmptyState, PageHeader, SectionHeader } from './ui';
 
@@ -74,7 +74,7 @@ const CardList: React.FC = () => {
     }
 
     try {
-      const updateData: Partial<Card> = {
+      const updateData: Partial<Card> & { expected_inventory_revision?: string } = {
         name: editForm.name.trim(),
         type: editForm.type as any,
         description: editForm.description?.trim(),
@@ -95,6 +95,7 @@ const CardList: React.FC = () => {
         updateData.text_content = editForm.text_content?.trim() || '';
       } else if (editForm.type === 'data') {
         updateData.data_content = editForm.data_content?.trim() || '';
+        updateData.expected_inventory_revision = selectedCard.inventory_revision;
       } else if (editForm.type === 'image') {
         updateData.image_url = editForm.image_url?.trim() || '';
       }
@@ -104,7 +105,12 @@ const CardList: React.FC = () => {
       getCards().then(setCards);
     } catch (error) {
       console.error('更新卡密失败:', error);
-      notify('更新失败，请重试');
+      const message = getApiErrorMessage(error, '更新失败，请重试');
+      notify(message);
+      if (message.includes('库存')) {
+        setShowEditModal(false);
+        getCards().then(setCards);
+      }
     }
   };
 
@@ -174,7 +180,7 @@ const CardList: React.FC = () => {
 
   const toggleCardStatus = async (card: Card) => {
     try {
-      await updateCard(card.id, { ...card, enabled: !card.enabled });
+      await updateCard(card.id, { enabled: !card.enabled });
       getCards().then(setCards);
     } catch (error) {
       console.error('切换状态失败:', error);

@@ -7,6 +7,9 @@ import {
   deleteAccount,
   generateQRLogin,
   checkQRLoginStatus,
+  startPasswordLogin,
+  checkPasswordLoginStatus,
+  getFaceVerificationScreenshot,
   updateAccountRemark,
   updateAccountAutoConfirm,
   updateAccountPauseDuration,
@@ -21,10 +24,14 @@ import {
   requestFreshCaptchaUrl,
 } from '../services/api';
 import { confirmAction, notify } from '../services/feedback';
-import {Power, Edit2, Trash2, QrCode, X, Check, Loader2, MessageSquare, RefreshCw, Save, User, Clock, Key, Eye, EyeOff, Bot, Settings, MapPin, Users, ShieldCheck} from 'lucide-react';
+import {Power, Edit2, Trash2, QrCode, X, Check, Loader2, MessageSquare, RefreshCw, Save, User, Clock, Key, Eye, EyeOff, Bot, Settings, MapPin, Users, ShieldCheck, LogIn} from 'lucide-react';
 import { EmptyState, PageHeader, PageLoading } from './ui';
 
 type ModalType = 'edit' | 'ai-settings' | null;
+
+// Docker/NAS 上 Chromium 冷启动、浏览器槽位排队和惩罚页渲染可能明显超过
+// 20 秒。会话尚未创建时 WebSocket 会被后端关闭，因此要持续重连到画面就绪。
+const CAPTCHA_WS_RETRY_LIMIT = 120;
 
 const AccountList: React.FC = () => {
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
@@ -46,6 +53,13 @@ const AccountList: React.FC = () => {
   const [verificationUrl, setVerificationUrl] = useState<string>('');
   const qrPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrSessionRef = useRef<string>('');
+  const [passwordLoginAccount, setPasswordLoginAccount] = useState<AccountDetail | null>(null);
+  const [passwordLoginStatus, setPasswordLoginStatus] = useState<'loading' | 'processing' | 'verification_required' | 'success' | 'failed'>('loading');
+  const [passwordLoginMessage, setPasswordLoginMessage] = useState('');
+  const [passwordVerificationUrl, setPasswordVerificationUrl] = useState('');
+  const [passwordScreenshotUrl, setPasswordScreenshotUrl] = useState('');
+  const passwordLoginPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const passwordLoginSessionRef = useRef('');
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingAccount, setEditingAccount] = useState<AccountDetail | null>(null);
   const [refreshingProfileId, setRefreshingProfileId] = useState<string | null>(null);
@@ -73,21 +87,16 @@ const AccountList: React.FC = () => {
     showLoginPassword: false,
   });
 
-  // AI设置表单状态（字段必须齐全：PUT 是整行 INSERT OR REPLACE，
-  // 少一个字段保存时就会被后端默认值静默覆盖）
+  // AI连接与上下文设置；商品业务规则统一在知识库维护。
   const [aiSettings, setAiSettings] = useState<AIReplySettings>({
     ai_enabled: false,
     model_name: 'qwen-plus',
     api_key: '',
     base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     user_agent: '',
-    max_discount_percent: 10,
-    max_discount_amount: 100,
-    max_bargain_rounds: 3,
     context_enabled: true,
     context_message_limit: 12,
     context_expire_minutes: 120,
-    custom_prompts: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -109,10 +118,6 @@ const AccountList: React.FC = () => {
       const accountsWithAI = data.map(account => ({
         ...account,
         ai_enabled: allAISettings[account.id]?.ai_enabled ?? false,
-        max_discount_percent: allAISettings[account.id]?.max_discount_percent ?? 10,
-        max_discount_amount: allAISettings[account.id]?.max_discount_amount ?? 100,
-        max_bargain_rounds: allAISettings[account.id]?.max_bargain_rounds ?? 3,
-        custom_prompts: allAISettings[account.id]?.custom_prompts ?? '',
       }));
 
       setAccounts(accountsWithAI);
@@ -146,6 +151,8 @@ const AccountList: React.FC = () => {
       clearInterval(timer);
       qrSessionRef.current = '';
       if (qrPollTimerRef.current) clearTimeout(qrPollTimerRef.current);
+      passwordLoginSessionRef.current = '';
+      if (passwordLoginPollTimerRef.current) clearTimeout(passwordLoginPollTimerRef.current);
     };
   }, []);
 
@@ -277,7 +284,7 @@ const AccountList: React.FC = () => {
           setCaptchaMessage('验证通过，正在回收 Cookie…');
         } else if (data.type === 'error') {
           // 会话尚未建立时后端会立刻返回 error，稍后重试即可
-          if (retry < 20) {
+          if (retry < CAPTCHA_WS_RETRY_LIMIT) {
             retry += 1;
             timer = setTimeout(connect, 1000);
           }
@@ -285,7 +292,7 @@ const AccountList: React.FC = () => {
       };
 
       ws.onclose = () => {
-        if (!closed && retry < 20) {
+        if (!closed && retry < CAPTCHA_WS_RETRY_LIMIT) {
           retry += 1;
           timer = setTimeout(connect, 1000);
         }
@@ -347,13 +354,9 @@ const AccountList: React.FC = () => {
         api_key: settings.api_key || '',
         base_url: settings.base_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         user_agent: settings.user_agent ?? '',
-        max_discount_percent: settings.max_discount_percent ?? 10,
-        max_discount_amount: settings.max_discount_amount ?? 100,
-        max_bargain_rounds: settings.max_bargain_rounds ?? 3,
         context_enabled: settings.context_enabled ?? true,
         context_message_limit: settings.context_message_limit ?? 12,
         context_expire_minutes: settings.context_expire_minutes ?? 120,
-        custom_prompts: settings.custom_prompts ?? '',
       });
     } catch (e) {
       console.error('Failed to load AI settings:', e);
@@ -525,6 +528,109 @@ const AccountList: React.FC = () => {
     qrSessionRef.current = '';
     if (qrPollTimerRef.current) clearTimeout(qrPollTimerRef.current);
     setShowQRModal(false);
+  };
+
+  const closePasswordLoginModal = () => {
+    passwordLoginSessionRef.current = '';
+    if (passwordLoginPollTimerRef.current) clearTimeout(passwordLoginPollTimerRef.current);
+    setPasswordLoginAccount(null);
+  };
+
+  const handlePasswordLogin = async (account: AccountDetail) => {
+    const username = account.username?.trim();
+    const password = account.login_password || '';
+    if (!username || !password) {
+      notify('请先在「编辑账号」的登录信息中配置用户名和登录密码', 'info');
+      openEditModal(account);
+      return;
+    }
+
+    passwordLoginSessionRef.current = '';
+    if (passwordLoginPollTimerRef.current) clearTimeout(passwordLoginPollTimerRef.current);
+    setPasswordLoginAccount(account);
+    setPasswordLoginStatus('loading');
+    setPasswordLoginMessage('正在启动账号密码登录…');
+    setPasswordVerificationUrl('');
+    setPasswordScreenshotUrl('');
+
+    try {
+      const startResult = await startPasswordLogin(
+        account.id,
+        username,
+        password,
+        account.show_browser || false,
+      );
+      if (!startResult.success || !startResult.session_id) {
+        throw new Error(startResult.message || '账号密码登录任务启动失败');
+      }
+
+      const sessionId = startResult.session_id;
+      passwordLoginSessionRef.current = sessionId;
+      setPasswordLoginStatus('processing');
+      setPasswordLoginMessage(startResult.message || '登录处理中，请稍候…');
+      let passwordScreenshotLoaded = false;
+
+      const pollStatus = async () => {
+        if (passwordLoginSessionRef.current !== sessionId) return;
+
+        try {
+          const statusResult = await checkPasswordLoginStatus(sessionId);
+          if (passwordLoginSessionRef.current !== sessionId) return;
+
+          if (statusResult.status === 'processing') {
+            setPasswordLoginStatus('processing');
+            setPasswordLoginMessage(statusResult.message || '正在使用已保存的账号密码登录…');
+            passwordLoginPollTimerRef.current = setTimeout(pollStatus, 800);
+            return;
+          }
+
+          if (statusResult.status === 'verification_required') {
+            setPasswordLoginStatus('verification_required');
+            setPasswordLoginMessage(statusResult.message || '请完成人脸验证，完成后会自动继续登录');
+            if (statusResult.verification_url) {
+              setPasswordVerificationUrl(statusResult.verification_url);
+            }
+            if (statusResult.screenshot_path && !passwordScreenshotLoaded) {
+              passwordScreenshotLoaded = true;
+              try {
+                const screenshotResult = await getFaceVerificationScreenshot(account.id);
+                if (screenshotResult.success && screenshotResult.screenshot?.path) {
+                  setPasswordScreenshotUrl(screenshotResult.screenshot.path);
+                }
+              } catch {
+                // 截图不是登录流程的必要条件，验证链接仍可继续使用。
+                passwordScreenshotLoaded = false;
+              }
+            }
+            passwordLoginPollTimerRef.current = setTimeout(pollStatus, 2000);
+            return;
+          }
+
+          if (statusResult.status === 'success') {
+            passwordLoginSessionRef.current = '';
+            setPasswordLoginStatus('success');
+            setPasswordLoginMessage(statusResult.message || '账号密码登录成功，账号已恢复监听');
+            await loadAccounts({ silent: true });
+            return;
+          }
+
+          passwordLoginSessionRef.current = '';
+          setPasswordLoginStatus('failed');
+          setPasswordLoginMessage(statusResult.error || statusResult.message || '账号密码登录失败');
+        } catch (error) {
+          if (passwordLoginSessionRef.current !== sessionId) return;
+          passwordLoginSessionRef.current = '';
+          setPasswordLoginStatus('failed');
+          setPasswordLoginMessage(error instanceof Error ? error.message : '登录状态查询失败');
+        }
+      };
+
+      passwordLoginPollTimerRef.current = setTimeout(pollStatus, 300);
+    } catch (error) {
+      passwordLoginSessionRef.current = '';
+      setPasswordLoginStatus('failed');
+      setPasswordLoginMessage(error instanceof Error ? error.message : '账号密码登录请求失败');
+    }
   };
 
   const getRuntimeBadge = (account: AccountDetail) => {
@@ -703,7 +809,7 @@ const AccountList: React.FC = () => {
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-1 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
+            <div className="flex flex-wrap items-center justify-end gap-1 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
                 <button
                     onClick={() => handleManualCaptcha(account)}
                     disabled={manualCaptchaId !== null || !blockedState}
@@ -717,6 +823,18 @@ const AccountList: React.FC = () => {
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <ShieldCheck className="h-4 w-4" />}
                     <span>人工验证</span>
+                </button>
+                <button
+                    onClick={() => handlePasswordLogin(account)}
+                    disabled={passwordLoginAccount !== null}
+                    className="flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-50"
+                    title="使用已保存的闲鱼账号和密码登录"
+                    aria-label="账号密码登录"
+                >
+                    {passwordLoginAccount?.id === account.id && passwordLoginStatus === 'processing'
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <LogIn className="h-4 w-4" />}
+                    <span>密码登录</span>
                 </button>
                 <button
                     onClick={() => handleRefreshProfile(account.id)}
@@ -860,6 +978,107 @@ const AccountList: React.FC = () => {
               </div>
           </div>,
           document.body
+      )}
+
+      {/* 账号密码登录弹窗 */}
+      {passwordLoginAccount && createPortal(
+        <div className="modal-overlay">
+          <div className="modal-container" style={{maxWidth: '28rem'}}>
+            <div className="modal-header flex items-start justify-between gap-4">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+                  <Key className="h-5 w-5 text-amber-600" />
+                  账号密码登录
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  {passwordLoginAccount.nickname || passwordLoginAccount.remark || passwordLoginAccount.id}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePasswordLoginModal}
+                className="rounded-md p-2 hover:bg-gray-100"
+                aria-label="关闭账号密码登录"
+              >
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="modal-body py-5">
+              <div className="media-light-surface flex min-h-56 flex-col items-center justify-center rounded-md border border-gray-200 bg-gray-50 p-5 text-center">
+                {(passwordLoginStatus === 'loading' || passwordLoginStatus === 'processing') && (
+                  <>
+                    <Loader2 className="mb-4 h-10 w-10 animate-spin text-amber-500" />
+                    <p className="font-bold text-gray-800">正在登录闲鱼账号</p>
+                    <p className="mt-2 text-xs text-gray-500">正在使用已保存的用户名和密码，请不要重复点击。</p>
+                  </>
+                )}
+                {passwordLoginStatus === 'verification_required' && (
+                  <>
+                    <ShieldCheck className="mb-3 h-12 w-12 text-amber-600" />
+                    <p className="font-bold text-amber-800">需要完成安全验证</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-600">验证完成后页面会自动继续登录，请不要关闭此弹窗。</p>
+                    {passwordScreenshotUrl && (
+                      <img
+                        src={passwordScreenshotUrl}
+                        alt="闲鱼安全验证页面"
+                        className="mt-4 max-h-56 max-w-full rounded-md border border-gray-200 object-contain"
+                      />
+                    )}
+                    {passwordVerificationUrl && (
+                      <a
+                        href={passwordVerificationUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-4 rounded-md bg-[#ffe100] px-4 py-2 text-xs font-bold text-[#2a2416] hover:bg-[#ffd700]"
+                      >
+                        打开验证页面
+                      </a>
+                    )}
+                  </>
+                )}
+                {passwordLoginStatus === 'success' && (
+                  <>
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-md bg-green-50">
+                      <Check className="h-7 w-7 text-green-600" />
+                    </div>
+                    <p className="font-bold text-green-700">登录成功</p>
+                  </>
+                )}
+                {passwordLoginStatus === 'failed' && (
+                  <>
+                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-md bg-red-50">
+                      <X className="h-7 w-7 text-red-600" />
+                    </div>
+                    <p className="font-bold text-red-700">登录失败</p>
+                    <button
+                      type="button"
+                      onClick={() => handlePasswordLogin(passwordLoginAccount)}
+                      className="ios-btn-secondary mt-4 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      重试
+                    </button>
+                  </>
+                )}
+              </div>
+              <p className="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-600">
+                {passwordLoginMessage}
+              </p>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={closePasswordLoginModal}
+                className="ios-btn-secondary w-full rounded-md px-4 py-2.5 text-sm"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* 编辑账号弹窗 */}
@@ -1074,7 +1293,7 @@ const AccountList: React.FC = () => {
                     <Bot className="h-4 w-4 text-amber-600" />
                     启用 AI 自动回复
                   </div>
-                  <div className="text-xs text-gray-500">AI将自动处理买家的砍价消息</div>
+                  <div className="text-xs text-gray-500">AI将根据当前商品绑定的知识库处理买家消息</div>
                 </div>
                 <button
                   type="button"
@@ -1091,57 +1310,9 @@ const AccountList: React.FC = () => {
                 </button>
               </div>
 
-              {/* 砍价策略 */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">砍价策略</h3>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">最大折扣比例 (%)</label>
-                    <input
-                      type="number"
-                      value={aiSettings.max_discount_percent}
-                      onChange={(e) => setAiSettings({ ...aiSettings, max_discount_percent: parseInt(e.target.value) || 0 })}
-                      className="ios-input w-full rounded-md px-3 py-2.5"
-                      min="0"
-                      max="100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">例如：10表示最多降价10%</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">最大折扣金额 (元)</label>
-                    <input
-                      type="number"
-                      value={aiSettings.max_discount_amount}
-                      onChange={(e) => setAiSettings({ ...aiSettings, max_discount_amount: parseInt(e.target.value) || 0 })}
-                      className="ios-input w-full rounded-md px-3 py-2.5"
-                      min="0"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">例如：100表示最多降价100元</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">最大砍价轮次</label>
-                    <input
-                      type="number"
-                      value={aiSettings.max_bargain_rounds}
-                      onChange={(e) => setAiSettings({ ...aiSettings, max_bargain_rounds: parseInt(e.target.value) || 1 })}
-                      className="ios-input w-full rounded-md px-3 py-2.5"
-                      min="1"
-                      max="10"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">买家最多可以砍价的次数</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 自定义提示词 */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">自定义提示词（可选）</label>
-                <textarea
-                  value={aiSettings.custom_prompts}
-                  onChange={(e) => setAiSettings({ ...aiSettings, custom_prompts: e.target.value })}
-                  placeholder="输入自定义的AI回复规则或风格指引...&#10;&#10;例如：回复时保持礼貌专业、使用简洁的语言、强调产品质量等"
-                  className="ios-input h-36 w-full resize-y rounded-md px-3 py-2.5"
-                />
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+                <h3 className="text-sm font-bold text-amber-900">商品业务规则已移至知识库</h3>
+                <p className="mt-1 text-xs leading-5 text-amber-800">价格、发货、区服、售后和其他商品约束，请在“知识库”页面对应商品绑定的知识库中维护。这里仅保存账号的模型连接和上下文开关。</p>
               </div>
 
               {/* AI如何工作 */}
@@ -1151,10 +1322,10 @@ const AccountList: React.FC = () => {
                   AI如何工作
                 </h4>
                 <ul className="text-xs text-blue-800 space-y-1">
-                  <li>• 自动识别买家的砍价请求</li>
-                  <li>• 根据设定的策略智能回复</li>
-                  <li>• 在合理范围内同意降价或礼貌拒绝</li>
-                  <li>• 保持专业友好的沟通风格</li>
+                  <li>• 使用商品绑定知识库中的业务规则</li>
+                  <li>• 使用全局回复风格统一表达</li>
+                  <li>• 保持账号、商品和会话上下文隔离</li>
+                  <li>• AI异常时自动回退默认回复</li>
                 </ul>
               </div>
             </div>

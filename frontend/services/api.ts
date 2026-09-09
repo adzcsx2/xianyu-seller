@@ -6,11 +6,14 @@ import {
   ProductVariantBinding, AIReplySettings, ShippingRule, ReplyRule, DefaultReply,
   DeliveryBlockRule, PersonalBlacklistEntry, MessageNotification,
   NotificationChannel, NotificationChannelType, RiskControlLog, SystemLog,
-  MessageFilter, MessageFilterType, AutoReplyLog
-  , ChatAccount, ChatConversation, ChatMessage, ProductMaterial,
+  MessageFilter, MessageFilterType, AutoReplyLog,
+  ChatAccount, ChatConversation, ChatMessage, ProductMaterial,
   ProductFilterRule, ProductDeleteRule, AutomationTaskRun,
   ProductAutomationResult, ProductDeletePreview, QuickPhrase,
-  AnnouncementPayload
+  AnnouncementPayload, ProductKnowledgeDocument, ProductKnowledgeEntry,
+  KnowledgePreviewResult, KnowledgeBaseSummary, KnowledgeBaseDetail, KnowledgeFact,
+  KnowledgeSource, KnowledgeRule, KnowledgeQAEntry, KnowledgeBinding, AIReplyStyle,
+  KnowledgeBaseAnswer,
 } from '../types';
 
 // Auth
@@ -95,6 +98,47 @@ export const generateQRLogin = async (): Promise<{ success: boolean; session_id?
 
 export const checkQRLoginStatus = async (sessionId: string): Promise<any> => {
   return get(`/qr-login/check/${sessionId}`);
+};
+
+export interface PasswordLoginStartResponse {
+  success: boolean;
+  session_id?: string;
+  status?: 'processing';
+  message?: string;
+}
+
+export interface PasswordLoginStatusResponse {
+  status: 'processing' | 'verification_required' | 'success' | 'failed' | 'error' | 'not_found' | 'forbidden';
+  message?: string;
+  error?: string;
+  verification_url?: string | null;
+  screenshot_path?: string | null;
+}
+
+export const startPasswordLogin = async (
+  accountId: string,
+  account: string,
+  password: string,
+  showBrowser = false,
+): Promise<PasswordLoginStartResponse> => {
+  return post('/password-login', {
+    account_id: accountId,
+    account,
+    password,
+    show_browser: showBrowser,
+  });
+};
+
+export const checkPasswordLoginStatus = async (sessionId: string): Promise<PasswordLoginStatusResponse> => {
+  return get(`/password-login/check/${encodeURIComponent(sessionId)}`);
+};
+
+export const getFaceVerificationScreenshot = async (accountId: string): Promise<{
+  success: boolean;
+  screenshot?: { path?: string };
+  message?: string;
+}> => {
+  return get(`/face-verification/screenshot/${encodeURIComponent(accountId)}`);
 };
 
 export const updateAccountStatus = async (id: string, enabled: boolean): Promise<any> => {
@@ -456,7 +500,10 @@ export const createCard = async (data: Partial<Card>): Promise<{ id: number; mes
   return post('/cards', data);
 };
 
-export const updateCard = async (cardId: string | number, data: Partial<Card>): Promise<ApiResponse> => {
+export const updateCard = async (
+  cardId: string | number,
+  data: Partial<Card> & { expected_inventory_revision?: string },
+): Promise<ApiResponse> => {
   return put(`/cards/${cardId}`, data);
 };
 
@@ -473,6 +520,80 @@ export const getItems = async (): Promise<Item[]> => {
     const res = await get<any>('/items');
     return Array.isArray(res) ? res : (res.items || []);
 }
+
+const knowledgePath = (cookieId: string, itemId: string, suffix = '') =>
+  `/items/${encodeURIComponent(cookieId)}/${encodeURIComponent(itemId)}/ai-knowledge${suffix}`;
+
+export const getProductKnowledge = async (cookieId: string, itemId: string): Promise<ProductKnowledgeDocument> => {
+  return get(knowledgePath(cookieId, itemId));
+};
+
+export const saveProductKnowledge = async (
+  cookieId: string,
+  itemId: string,
+  expectedVersion: number,
+  entries: ProductKnowledgeEntry[],
+): Promise<ProductKnowledgeDocument> => {
+  return put(knowledgePath(cookieId, itemId), {
+    expected_version: expectedVersion,
+    entries,
+  });
+};
+
+export const importPassistantKnowledge = async (
+  cookieId: string,
+  itemId: string,
+  expectedVersion: number,
+): Promise<{ cookie_id: string; item_id: string; product_key: string; display_name: string; version: number; seed_version: string; checksum: string; entry_count: number }> => {
+  return post(knowledgePath(cookieId, itemId, '/import-passistant'), {
+    expected_version: expectedVersion,
+  });
+};
+
+export const previewProductKnowledge = async (
+  cookieId: string,
+  itemId: string,
+  message: string,
+): Promise<KnowledgePreviewResult> => {
+  return post(knowledgePath(cookieId, itemId, '/preview'), { message });
+};
+
+const knowledgeBasePath = (baseId: string, suffix = '') => `/knowledge-bases/${encodeURIComponent(baseId)}${suffix}`;
+export const listKnowledgeBases = async (): Promise<KnowledgeBaseSummary[]> => {
+  const result = await get<{ knowledge_bases: KnowledgeBaseSummary[] }>('/knowledge-bases');
+  return result.knowledge_bases || [];
+};
+export const createKnowledgeBase = async (name: string, description = ''): Promise<KnowledgeBaseSummary> => post('/knowledge-bases', { name, description });
+export const getKnowledgeBase = async (baseId: string): Promise<KnowledgeBaseDetail> => get(knowledgeBasePath(baseId));
+export const updateKnowledgeBase = async (baseId: string, expectedVersion: number, data: Partial<Pick<KnowledgeBaseDetail, 'name' | 'description' | 'enabled'>>): Promise<KnowledgeBaseSummary> => put(knowledgeBasePath(baseId), { ...data, expected_version: expectedVersion });
+export const deleteKnowledgeBase = async (baseId: string, expectedVersion: number): Promise<ApiResponse & { binding_count?: number }> => del(`${knowledgeBasePath(baseId)}?expected_version=${expectedVersion}`);
+
+type KnowledgeKind = 'facts' | 'sources' | 'rules' | 'qa-entries';
+const contentPath = (baseId: string, kind: KnowledgeKind, id?: string) => `${knowledgeBasePath(baseId)}/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`;
+export const createKnowledgeContent = async <T>(baseId: string, kind: KnowledgeKind, expectedVersion: number, payload: Partial<T>): Promise<T & { version: number }> => post(contentPath(baseId, kind), { ...payload, expected_version: expectedVersion });
+export const updateKnowledgeContent = async <T>(baseId: string, kind: KnowledgeKind, id: string, expectedVersion: number, payload: Partial<T>): Promise<T & { version: number }> => put(contentPath(baseId, kind, id), { ...payload, expected_version: expectedVersion });
+export const deleteKnowledgeContent = async (baseId: string, kind: KnowledgeKind, id: string, expectedVersion: number): Promise<ApiResponse> => del(`${contentPath(baseId, kind, id)}?expected_version=${expectedVersion}`);
+export const listKnowledgeContent = async <T>(baseId: string, kind: KnowledgeKind): Promise<T[]> => {
+  const result = await get<Record<string, T[]>>(contentPath(baseId, kind));
+  return result[kind.replace('-', '_')] || [];
+};
+export const askKnowledgeBase = async (
+  baseId: string,
+  cookieId: string,
+  question: string,
+): Promise<KnowledgeBaseAnswer> => post(knowledgeBasePath(baseId, '/ask'), {
+  cookie_id: cookieId,
+  question,
+});
+export const getKnowledgeBindings = async (cookieId: string, itemId: string): Promise<KnowledgeBinding[]> => {
+  const result = await get<{ bindings: KnowledgeBinding[] }>(`/items/${encodeURIComponent(cookieId)}/${encodeURIComponent(itemId)}/knowledge-bindings`);
+  return result.bindings || [];
+};
+export const addKnowledgeBinding = async (cookieId: string, itemId: string, knowledgeBaseId: string): Promise<KnowledgeBinding> => post(`/items/${encodeURIComponent(cookieId)}/${encodeURIComponent(itemId)}/knowledge-bindings`, { knowledge_base_id: knowledgeBaseId });
+export const removeKnowledgeBinding = async (cookieId: string, itemId: string, knowledgeBaseId: string): Promise<ApiResponse> => del(`/items/${encodeURIComponent(cookieId)}/${encodeURIComponent(itemId)}/knowledge-bindings/${encodeURIComponent(knowledgeBaseId)}`);
+export const previewKnowledge = async (cookieId: string, itemId: string, message: string): Promise<KnowledgePreviewResult> => post(`/items/${encodeURIComponent(cookieId)}/${encodeURIComponent(itemId)}/knowledge-preview`, { message });
+export const getAIReplyStyle = async (): Promise<AIReplyStyle> => get('/ai-reply-style');
+export const updateAIReplyStyle = async (expectedVersion: number, replyStyle: string): Promise<AIReplyStyle> => put('/ai-reply-style', { expected_version: expectedVersion, reply_style: replyStyle });
 
 export const syncItemsFromAccount = async (cookieId: string): Promise<any> => {
     return post('/items/get-all-from-account', { cookie_id: cookieId });
@@ -816,13 +937,10 @@ export const updateAccountAISettings = async (cookieId: string, settings: Partia
     model_name: settings.model_name ?? 'qwen-plus',
     api_key: settings.api_key ?? '',
     base_url: settings.base_url ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    max_discount_percent: settings.max_discount_percent ?? 10,
-    max_discount_amount: settings.max_discount_amount ?? 100,
-    max_bargain_rounds: settings.max_bargain_rounds ?? 3,
+    user_agent: settings.user_agent ?? '',
     context_enabled: settings.context_enabled ?? true,
     context_message_limit: settings.context_message_limit ?? 12,
     context_expire_minutes: settings.context_expire_minutes ?? 120,
-    custom_prompts: settings.custom_prompts ?? ''
   };
   return put(`/ai-reply-settings/${cookieId}`, payload);
 }
@@ -830,15 +948,13 @@ export const updateAccountAISettings = async (cookieId: string, settings: Partia
 export const testAIConnection = async (
   cookieId: string,
   payload: {
-    message?: string;
-    item_title?: string;
-    item_price?: number;
-    item_desc?: string;
-  } = {},
+    message: string;
+    item_id: string;
+  },
 ): Promise<ApiResponse & { reply?: string }> => {
   const result = await post<{ success?: boolean; message?: string; reply?: string }>(
     `/ai-reply-test/${cookieId}`,
-    { message: '你好，这是一条测试消息', ...payload },
+    payload,
   );
   return {
     success: result.success ?? true,

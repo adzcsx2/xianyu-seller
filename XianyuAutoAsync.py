@@ -26,6 +26,7 @@ from collections import defaultdict
 from app.db_manager import db_manager
 from app.specification import combine_legacy_specification
 from utils.log_sanitizer import redact_log_record, redact_sensitive_text
+from utils.mtop_browser_fingerprint import build_mtop_request_headers
 
 # 滑块验证补丁已废弃，使用集成的 Playwright 登录方法
 # 不再需要猴子补丁，所有功能已集成到 XianyuSliderStealth 类中
@@ -2176,25 +2177,9 @@ class XianyuLive:
             sign = generate_sign(params['t'], token, data_val)
             params['sign'] = sign
 
-            # 发送请求 - 使用与浏览器完全一致的请求头
-            headers = {
-                'accept': 'application/json',
-                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                'cache-control': 'no-cache',
-                'content-type': 'application/x-www-form-urlencoded',
-                'pragma': 'no-cache',
-                'priority': 'u=1, i',
-                'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site',
-                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-                'referer': 'https://www.goofish.com/',
-                'origin': 'https://www.goofish.com',
-                'cookie': self.cookies_str
-            }
+            # x5sec 会绑定滑块浏览器的 UA 与 Client Hints，必须和人工验证
+            # context 共用同一个配置源，不能在这里单独硬编码浏览器版本。
+            headers = build_mtop_request_headers(self.cookies_str)
 
             api_url = API_ENDPOINTS.get('token')
             cookie_dict = trans_cookies(self.cookies_str)
@@ -3033,14 +3018,23 @@ class XianyuLive:
             
             # 在单独的线程中运行同步的登录方法
             import asyncio
-            slider = XianyuSliderStealth(user_id=self.cookie_id, enable_learning=False, headless=not show_browser)
-            result = await asyncio.to_thread(
-                slider.login_with_password_playwright,
-                account=username,
-                password=password,
-                show_browser=show_browser,
-                notification_callback=notification_callback_wrapper
-            )
+
+            def run_password_login():
+                slider = XianyuSliderStealth(
+                    user_id=self.cookie_id, enable_learning=False, headless=not show_browser,
+                )
+                try:
+                    return slider.login_with_password_playwright(
+                        account=username,
+                        password=password,
+                        show_browser=show_browser,
+                        notification_callback=notification_callback_wrapper,
+                    )
+                finally:
+                    # 并发管理器持有实例引用，不能依赖析构函数释放槽位。
+                    slider.close_browser()
+
+            result = await asyncio.to_thread(run_password_login)
             
             if result:
                 logger.info(f"【{self.cookie_id}】密码登录成功，获取到Cookie")
