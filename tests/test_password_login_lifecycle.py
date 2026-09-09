@@ -48,6 +48,36 @@ class PasswordLoginLifecycleTests(unittest.IsolatedAsyncioTestCase):
         live._update_cookies_and_restart = AsyncMock(return_value=True)
         return live
 
+    def test_password_verification_state_preserves_sms_instruction(self):
+        session = {'status': 'processing'}
+
+        reply_server.set_password_login_verification_state(
+            session,
+            '账号密码登录需要短信验证，请按验证页面提示主动发送短信',
+        )
+
+        self.assertEqual(session['status'], 'verification_required')
+        self.assertEqual(session['verification_type'], 'sms')
+        self.assertEqual(
+            session['verification_message'],
+            '账号密码登录需要短信验证，请按验证页面提示主动发送短信',
+        )
+
+    async def test_password_status_returns_sms_metadata_to_frontend(self):
+        self.session.update(
+            status='verification_required',
+            verification_type='sms',
+            verification_message='请按验证页面提示主动发送短信，完成后会自动继续登录',
+        )
+
+        result = await reply_server.check_password_login_status(
+            'test-session', current_user=self.user,
+        )
+
+        self.assertEqual(result['status'], 'verification_required')
+        self.assertEqual(result['verification_type'], 'sms')
+        self.assertIn('主动发送短信', result['message'])
+
     async def test_manual_constructor_runs_off_event_loop_and_cleans_instance(self):
         loop_thread = threading.get_ident()
         real_class = slider_module.XianyuSliderStealth
