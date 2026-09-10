@@ -2586,23 +2586,23 @@ class XianyuSliderStealth:
                 except:
                     continue
             
-            # 检测所有frames中的二维码/人脸验证
-            # 首先检查是否有 alibaba-login-box iframe（人脸验证或短信验证）
+            # 检测所有frames中的短信验证
+            # 首先检查是否有 alibaba-login-box iframe（短信验证页面）
             try:
                 iframes = page.query_selector_all('iframe')
                 for iframe in iframes:
                     try:
                         iframe_id = iframe.get_attribute('id')
                         if iframe_id == 'alibaba-login-box':
-                            logger.info(f"【{self.pure_user_id}】✅ 检测到 alibaba-login-box iframe（人脸验证/短信验证）")
+                            logger.info(f"【{self.pure_user_id}】✅ 检测到 alibaba-login-box iframe（短信验证）")
                             frame = iframe.content_frame()
                             if frame:
-                                logger.info(f"【{self.pure_user_id}】人脸验证/短信验证Frame URL: {frame.url if hasattr(frame, 'url') else '未知'}")
+                                logger.info(f"【{self.pure_user_id}】短信验证Frame URL: {frame.url if hasattr(frame, 'url') else '未知'}")
                                 
-                                # 尝试自动点击"其他验证方式"，然后找到"通过拍摄脸部"的验证按钮
-                                face_verify_url = self._get_face_verification_url(frame)
-                                if face_verify_url:
-                                    logger.info(f"【{self.pure_user_id}】✅ 获取到人脸验证链接: {face_verify_url}")
+                                # 尝试切换到短信验证，不主动跳转到人脸验证。
+                                sms_verify_url = self._get_sms_verification_url(frame)
+                                if sms_verify_url:
+                                    logger.info(f"【{self.pure_user_id}】✅ 获取到短信验证页面: {sms_verify_url}")
                                     
                                     # 截图并保存
                                     screenshot_path = None
@@ -2663,15 +2663,24 @@ class XianyuSliderStealth:
                                     
                                     # 创建一个特殊的frame对象，包含截图路径
                                     class VerificationFrame:
-                                        def __init__(self, original_frame, verify_url, screenshot_path=None):
+                                        def __init__(
+                                            self,
+                                            original_frame,
+                                            verify_url,
+                                            screenshot_path=None,
+                                            verification_type='sms',
+                                        ):
                                             self._original_frame = original_frame
                                             self.verify_url = verify_url
                                             self.screenshot_path = screenshot_path
+                                            self.verification_type = verification_type
                                         
                                         def __getattr__(self, name):
                                             return getattr(self._original_frame, name)
                                     
-                                    return True, VerificationFrame(frame, face_verify_url, screenshot_path)
+                                    return True, VerificationFrame(
+                                        frame, sms_verify_url, screenshot_path, 'sms'
+                                    )
                                 
                                 return True, frame
                     except Exception as e:
@@ -2800,10 +2809,10 @@ class XianyuSliderStealth:
             logger.error(f"【{self.pure_user_id}】检测二维码/人脸验证时出错: {e}")
             return False, None
     
-    def _get_face_verification_url(self, frame) -> str:
-        """在alibaba-login-box frame中，点击'其他验证方式'，然后找到'通过拍摄脸部'的验证按钮，获取链接"""
+    def _get_sms_verification_url(self, frame) -> str:
+        """在 alibaba-login-box frame 中切换到短信验证并返回当前验证页面。"""
         try:
-            logger.info(f"【{self.pure_user_id}】开始查找人脸验证链接...")
+            logger.info(f"【{self.pure_user_id}】开始查找短信验证页面...")
             
             # 等待frame加载完成
             time.sleep(2)
@@ -2833,27 +2842,24 @@ class XianyuSliderStealth:
             # 等待页面加载
             time.sleep(2)
             
-            # 查找"通过拍摄脸部"相关的验证按钮，获取href并点击按钮
-            face_verify_url = None
+            # 查找短信/手机验证选项，获取 href 并点击按钮。不要选择人脸验证。
+            sms_verify_url = None
             
-            # 方法1: 使用JavaScript精确查找，获取href并点击按钮（根据HTML结构：li > div.desc包含"通过 拍摄脸部" + a.ui-button包含"立即验证"）
+            # 方法1：使用 JavaScript 查找短信/手机验证选项。
             try:
                 href = frame.evaluate("""
                     () => {
-                        // 查找所有li元素
                         const listItems = document.querySelectorAll('li');
                         for (let li of listItems) {
-                            // 查找包含"通过 拍摄脸部"或"通过拍摄脸部"的desc div，但不能包含"手机"
                             const descDiv = li.querySelector('div.desc');
-                            if (descDiv && !descDiv.innerText.includes('手机') && (descDiv.innerText.includes('通过 拍摄脸部') || descDiv.innerText.includes('通过拍摄脸部') || descDiv.innerText.includes('拍摄脸部'))) {
-                                // 在同一li中查找"立即验证"按钮
+                            const text = descDiv ? descDiv.innerText : '';
+                            const isSms = text.includes('短信') || text.includes('手机');
+                            const isFace = text.includes('拍摄脸部') || text.includes('人脸');
+                            if (descDiv && isSms && !isFace) {
                                 const verifyButton = li.querySelector('a.ui-button, a.ui-button-small, button');
                                 if (verifyButton && verifyButton.innerText && verifyButton.innerText.includes('立即验证')) {
-                                    // 获取按钮的href属性
                                     const href = verifyButton.href || verifyButton.getAttribute('href') || null;
-                                    // 点击按钮
                                     verifyButton.click();
-                                    // 返回href
                                     return href;
                                 }
                             }
@@ -2862,13 +2868,13 @@ class XianyuSliderStealth:
                     }
                 """)
                 if href:
-                    face_verify_url = href
-                    logger.info(f"【{self.pure_user_id}】通过JavaScript找到'通过拍摄脸部'验证按钮的href并已点击: {face_verify_url}")
+                    sms_verify_url = href
+                    logger.info(f"【{self.pure_user_id}】通过JavaScript找到短信验证按钮并已点击: {sms_verify_url}")
             except Exception as e:
                 logger.debug(f"【{self.pure_user_id}】方法1（JavaScript）查找失败: {e}")
             
             # 方法2: 如果方法1失败，使用Playwright API查找并点击
-            if not face_verify_url:
+            if not sms_verify_url:
                 try:
                     # 查找所有li元素
                     list_items = frame.query_selector_all('li')
@@ -2878,8 +2884,10 @@ class XianyuSliderStealth:
                             desc_div = li.query_selector('div.desc')
                             if desc_div:
                                 desc_text = desc_div.inner_text()
-                                if '手机' not in desc_text and ('通过 拍摄脸部' in desc_text or '通过拍摄脸部' in desc_text or '拍摄脸部' in desc_text):
-                                    logger.info(f"【{self.pure_user_id}】找到'通过拍摄脸部'选项（方法2）")
+                                is_sms = '短信' in desc_text or '手机' in desc_text
+                                is_face = '拍摄脸部' in desc_text or '人脸' in desc_text
+                                if is_sms and not is_face:
+                                    logger.info(f"【{self.pure_user_id}】找到短信验证选项（方法2）")
                                     # 在同一li中查找验证按钮
                                     verify_button = li.query_selector('a.ui-button, a.ui-button-small, button')
                                     if verify_button:
@@ -2888,10 +2896,10 @@ class XianyuSliderStealth:
                                             # 获取按钮的href属性
                                             href = verify_button.get_attribute('href')
                                             if href:
-                                                face_verify_url = href
-                                                logger.info(f"【{self.pure_user_id}】找到'通过拍摄脸部'验证按钮的href: {face_verify_url}")
+                                                sms_verify_url = href
+                                                logger.info(f"【{self.pure_user_id}】找到短信验证按钮的href: {sms_verify_url}")
                                                 # 点击按钮
-                                                logger.info(f"【{self.pure_user_id}】点击'立即验证'按钮...")
+                                                logger.info(f"【{self.pure_user_id}】点击短信验证'立即验证'按钮...")
                                                 verify_button.click()
                                                 logger.info(f"【{self.pure_user_id}】已点击'立即验证'按钮")
                                                 break
@@ -2900,22 +2908,22 @@ class XianyuSliderStealth:
                 except Exception as e:
                     logger.debug(f"【{self.pure_user_id}】方法2查找失败: {e}")
             
-            if face_verify_url:
+            if sms_verify_url:
                 # 如果是相对路径，转换为绝对路径
-                if not face_verify_url.startswith('http'):
+                if not sms_verify_url.startswith('http'):
                     base_url = frame.url.split('/iv/')[0] if '/iv/' in frame.url else 'https://passport.goofish.com'
-                    if face_verify_url.startswith('/'):
-                        face_verify_url = base_url + face_verify_url
+                    if sms_verify_url.startswith('/'):
+                        sms_verify_url = base_url + sms_verify_url
                     else:
-                        face_verify_url = base_url + '/' + face_verify_url
+                        sms_verify_url = base_url + '/' + sms_verify_url
                 
-                return face_verify_url
+                return sms_verify_url
             else:
-                logger.warning(f"【{self.pure_user_id}】未找到人脸验证链接，返回原始frame URL")
+                logger.warning(f"【{self.pure_user_id}】未找到短信验证按钮，返回原始frame URL")
                 return frame.url if hasattr(frame, 'url') else None
                 
         except Exception as e:
-            logger.error(f"【{self.pure_user_id}】获取人脸验证链接时出错: {e}")
+            logger.error(f"【{self.pure_user_id}】获取短信验证页面时出错: {e}")
             import traceback
             logger.debug(traceback.format_exc())
             return None
@@ -3538,7 +3546,7 @@ class XianyuSliderStealth:
                                     # 检查是否有验证链接（从VerificationFrame对象）
                                     if hasattr(qr_frame, 'verify_url') and qr_frame.verify_url:
                                         frame_url = qr_frame.verify_url
-                                        logger.info(f"【{self.pure_user_id}】使用获取到的人脸验证链接: {frame_url}")
+                                        logger.info(f"【{self.pure_user_id}】使用获取到的短信验证页面: {frame_url}")
                                     else:
                                         frame_url = qr_frame.url if hasattr(qr_frame, 'url') else None
                                     
@@ -3559,7 +3567,7 @@ class XianyuSliderStealth:
                                 logger.warning(f"【{self.pure_user_id}】" + "=" * 60)
                             elif frame_url:
                                 logger.warning(f"【{self.pure_user_id}】" + "=" * 60)
-                                logger.warning(f"【{self.pure_user_id}】二维码/人脸验证链接:")
+                                logger.warning(f"【{self.pure_user_id}】短信验证页面链接:")
                                 logger.warning(f"【{self.pure_user_id}】{frame_url}")
                                 logger.warning(f"【{self.pure_user_id}】" + "=" * 60)
                             else:
@@ -3578,18 +3586,18 @@ class XianyuSliderStealth:
                                         if screenshot_path:
                                             
                                             notification_msg = (
-                                                f"⚠️ 账号密码登录需要人脸验证\n\n"
+                                                f"⚠️ 账号密码登录需要短信验证\n\n"
                                                 f"账号: {self.pure_user_id}\n"
                                                 f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                                                f"请登录自动化网站，访问账号管理模块，进行对应账号的人脸验证"
+                                                f"请按验证页面提示主动发送短信，完成短信验证"
                                                 f"在验证期间，闲鱼自动回复暂时无法使用。"
                                             )
                                         else:
                                             notification_msg = (
-                                                f"⚠️ 账号密码登录需要人脸验证\n\n"
+                                                f"⚠️ 账号密码登录需要短信验证\n\n"
                                                 f"账号: {self.pure_user_id}\n"
                                                 f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                                                f"请点击验证链接完成验证:\n{frame_url}\n\n"
+                                                f"请打开验证页面，按页面提示主动发送短信:\n{frame_url}\n\n"
                                                 f"在验证期间，闲鱼自动回复暂时无法使用。"
                                             )
                                         

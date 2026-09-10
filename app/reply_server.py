@@ -2296,6 +2296,31 @@ def get_cookie_account_details(cid: str, current_user: Dict[str, Any] = Depends(
 
 # ========================= 账号密码登录相关接口 =========================
 
+def classify_password_verification(message: str) -> str:
+    """根据验证提示区分短信验证，避免前端把它误显示成人脸验证。"""
+    text = str(message or '')
+    if '短信' in text or ('手机' in text and '验证' in text):
+        return 'sms'
+    if any(keyword in text for keyword in ('人脸', '拍摄脸部', '面部')):
+        return 'face'
+    return 'security'
+
+
+def set_password_login_verification_state(
+    session: Dict[str, Any],
+    message: str,
+    screenshot_path: Optional[str] = None,
+    verification_url: Optional[str] = None,
+) -> None:
+    """把登录验证状态完整保存下来，即使没有截图或链接也不能继续假装处理中。"""
+    session['status'] = 'verification_required'
+    session['verification_type'] = classify_password_verification(message)
+    session['verification_message'] = str(message or '').strip()
+    session['screenshot_path'] = screenshot_path
+    session['verification_url'] = verification_url
+    session['qr_code_url'] = None
+
+
 async def _execute_password_login(session_id: str, account_id: str, account: str, password: str, show_browser: bool, user_id: int, current_user: Dict[str, Any]):
     """后台执行账号密码登录任务"""
     try:
@@ -2318,21 +2343,29 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                 # 优先使用新的截图路径参数
                 actual_screenshot_path = screenshot_path_new if screenshot_path_new else screenshot_path
                 
+                valid_screenshot_path = (
+                    actual_screenshot_path
+                    if actual_screenshot_path and os.path.exists(actual_screenshot_path)
+                    else None
+                )
+                # 无论是否能保存截图，都要先把验证状态交给前端，避免弹窗一直显示“登录中”。
+                set_password_login_verification_state(
+                    password_login_sessions[session_id],
+                    message,
+                    screenshot_path=valid_screenshot_path,
+                    verification_url=verification_url,
+                )
+
                 # 优先使用截图路径，如果没有截图则使用验证链接
-                if actual_screenshot_path and os.path.exists(actual_screenshot_path):
-                    # 更新会话状态，保存截图路径
-                    password_login_sessions[session_id]['status'] = 'verification_required'
-                    password_login_sessions[session_id]['screenshot_path'] = actual_screenshot_path
-                    password_login_sessions[session_id]['verification_url'] = None
-                    password_login_sessions[session_id]['qr_code_url'] = None
-                    log_with_user('info', f"人脸认证截图已保存: {session_id}, 路径: {actual_screenshot_path}", current_user)
+                if valid_screenshot_path:
+                    log_with_user('info', f"短信验证截图已保存: {session_id}, 路径: {actual_screenshot_path}", current_user)
                     
                     # 发送通知到用户配置的渠道
-                    def send_face_verification_notification():
-                        """在后台线程中发送人脸验证通知"""
+                    def send_sms_verification_notification():
+                        """在后台线程中发送短信验证通知"""
                         try:
                             from XianyuAutoAsync import XianyuLive
-                            log_with_user('info', f"开始尝试发送人脸验证通知: {account_id}", current_user)
+                            log_with_user('info', f"开始尝试发送短信验证通知: {account_id}", current_user)
                             
                             # 尝试获取XianyuLive实例（如果账号已经存在）
                             live_instance = XianyuLive.get_instance(account_id)
@@ -2346,21 +2379,21 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                                     new_loop.run_until_complete(
                                         live_instance.send_token_refresh_notification(
                                             error_message=message,
-                                            notification_type="face_verification",
+                                            notification_type="sms_verification",
                                             verification_url=None,
                                             attachment_path=actual_screenshot_path
                                         )
                                     )
-                                    log_with_user('info', f"✅ 已发送人脸验证通知: {account_id}", current_user)
+                                    log_with_user('info', f"✅ 已发送短信验证通知: {account_id}", current_user)
                                 except Exception as notify_err:
-                                    log_with_user('error', f"发送人脸验证通知失败: {str(notify_err)}", current_user)
+                                    log_with_user('error', f"发送短信验证通知失败: {str(notify_err)}", current_user)
                                     import traceback
                                     log_with_user('error', f"通知错误详情: {traceback.format_exc()}", current_user)
                                 finally:
                                     new_loop.close()
                             else:
                                 # 如果账号实例不存在，记录警告并尝试从数据库获取通知配置
-                                log_with_user('warning', f"账号实例不存在: {account_id}，尝试从数据库获取通知配置", current_user)
+                                log_with_user('warning', f"账号实例不存在: {account_id}，尝试从数据库获取短信验证通知配置", current_user)
                                 try:
                                     # 尝试从数据库获取通知配置
                                     notifications = db_manager.get_account_notifications(account_id)
@@ -2372,30 +2405,26 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                                 except Exception as db_err:
                                     log_with_user('error', f"获取通知配置失败: {str(db_err)}", current_user)
                         except Exception as notify_err:
-                            log_with_user('error', f"发送人脸验证通知时出错: {str(notify_err)}", current_user)
+                            log_with_user('error', f"发送短信验证通知时出错: {str(notify_err)}", current_user)
                             import traceback
                             log_with_user('error', f"通知错误详情: {traceback.format_exc()}", current_user)
                     
                     # 在后台线程中发送通知，避免阻塞登录流程
                     import threading
-                    notification_thread = threading.Thread(target=send_face_verification_notification)
+                    notification_thread = threading.Thread(target=send_sms_verification_notification)
                     notification_thread.daemon = True
                     notification_thread.start()
-                    log_with_user('info', f"已启动人脸验证通知发送线程: {account_id}", current_user)
+                    log_with_user('info', f"已启动短信验证通知发送线程: {account_id}", current_user)
                 elif verification_url:
                     # 如果没有截图，使用验证链接（兼容旧版本）
-                    password_login_sessions[session_id]['status'] = 'verification_required'
-                    password_login_sessions[session_id]['verification_url'] = verification_url
-                    password_login_sessions[session_id]['screenshot_path'] = None
-                    password_login_sessions[session_id]['qr_code_url'] = None
-                    log_with_user('info', f"人脸认证验证链接已保存: {session_id}, URL: {verification_url}", current_user)
+                    log_with_user('info', f"短信验证链接已保存: {session_id}, URL: {verification_url}", current_user)
                     
                     # 发送通知到用户配置的渠道
-                    def send_face_verification_notification():
-                        """在后台线程中发送人脸验证通知"""
+                    def send_sms_verification_notification():
+                        """在后台线程中发送短信验证通知"""
                         try:
                             from XianyuAutoAsync import XianyuLive
-                            log_with_user('info', f"开始尝试发送人脸验证通知: {account_id}", current_user)
+                            log_with_user('info', f"开始尝试发送短信验证通知: {account_id}", current_user)
                             
                             # 尝试获取XianyuLive实例（如果账号已经存在）
                             live_instance = XianyuLive.get_instance(account_id)
@@ -2409,13 +2438,13 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                                     new_loop.run_until_complete(
                                         live_instance.send_token_refresh_notification(
                                             error_message=message,
-                                            notification_type="face_verification",
+                                            notification_type="sms_verification",
                                             verification_url=verification_url
                                         )
                                     )
-                                    log_with_user('info', f"✅ 已发送人脸验证通知: {account_id}", current_user)
+                                    log_with_user('info', f"✅ 已发送短信验证通知: {account_id}", current_user)
                                 except Exception as notify_err:
-                                    log_with_user('error', f"发送人脸验证通知失败: {str(notify_err)}", current_user)
+                                    log_with_user('error', f"发送短信验证通知失败: {str(notify_err)}", current_user)
                                     import traceback
                                     log_with_user('error', f"通知错误详情: {traceback.format_exc()}", current_user)
                                 finally:
@@ -2434,16 +2463,16 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
                                 except Exception as db_err:
                                     log_with_user('error', f"获取通知配置失败: {str(db_err)}", current_user)
                         except Exception as notify_err:
-                            log_with_user('error', f"发送人脸验证通知时出错: {str(notify_err)}", current_user)
+                            log_with_user('error', f"发送短信验证通知时出错: {str(notify_err)}", current_user)
                             import traceback
                             log_with_user('error', f"通知错误详情: {traceback.format_exc()}", current_user)
                     
                     # 在后台线程中发送通知，避免阻塞登录流程
                     import threading
-                    notification_thread = threading.Thread(target=send_face_verification_notification)
+                    notification_thread = threading.Thread(target=send_sms_verification_notification)
                     notification_thread.daemon = True
                     notification_thread.start()
-                    log_with_user('info', f"已启动人脸验证通知发送线程: {account_id}", current_user)
+                    log_with_user('info', f"已启动短信验证通知发送线程: {account_id}", current_user)
             except Exception as e:
                 log_with_user('error', f"处理人脸认证通知失败: {str(e)}", current_user)
         
@@ -2667,6 +2696,8 @@ async def password_login(
             'status': 'processing',
             'verification_url': None,
             'screenshot_path': None,
+            'verification_type': None,
+            'verification_message': None,
             'qr_code_url': None,
             'slider_instance': None,
             'task': None,
@@ -2725,15 +2756,23 @@ async def check_password_login_status(
         status = session['status']
         
         if status == 'verification_required':
-            # 需要人脸认证
             screenshot_path = session.get('screenshot_path')
             verification_url = session.get('verification_url')
+            verification_type = session.get('verification_type') or classify_password_verification(
+                session.get('verification_message', '')
+            )
+            verification_message = session.get('verification_message') or (
+                '请按验证页面提示主动发送短信，完成后会自动继续登录'
+                if verification_type == 'sms'
+                else '请完成安全验证，完成后会自动继续登录'
+            )
             return {
                 'status': 'verification_required',
                 'verification_url': verification_url,
                 'screenshot_path': screenshot_path,
+                'verification_type': verification_type,
                 'qr_code_url': session.get('qr_code_url'),  # 保留兼容性
-                'message': '需要人脸验证，请查看验证截图' if screenshot_path else '需要人脸验证，请点击验证链接'
+                'message': verification_message,
             }
         elif status == 'success':
             # 登录成功

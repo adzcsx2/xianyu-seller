@@ -114,6 +114,7 @@ export interface PasswordLoginStatusResponse {
   error?: string;
   verification_url?: string | null;
   screenshot_path?: string | null;
+  verification_type?: 'sms' | 'face' | 'security' | null;
 }
 
 export const startPasswordLogin = async (

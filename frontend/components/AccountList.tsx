@@ -56,6 +56,7 @@ const AccountList: React.FC = () => {
   const [passwordLoginAccount, setPasswordLoginAccount] = useState<AccountDetail | null>(null);
   const [passwordLoginStatus, setPasswordLoginStatus] = useState<'loading' | 'processing' | 'verification_required' | 'success' | 'failed'>('loading');
   const [passwordLoginMessage, setPasswordLoginMessage] = useState('');
+  const [passwordVerificationType, setPasswordVerificationType] = useState<'sms' | 'face' | 'security'>('sms');
   const [passwordVerificationUrl, setPasswordVerificationUrl] = useState('');
   const [passwordScreenshotUrl, setPasswordScreenshotUrl] = useState('');
   const passwordLoginPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -570,6 +571,7 @@ const AccountList: React.FC = () => {
     setPasswordLoginAccount(account);
     setPasswordLoginStatus('loading');
     setPasswordLoginMessage('正在启动账号密码登录…');
+    setPasswordVerificationType('sms');
     setPasswordVerificationUrl('');
     setPasswordScreenshotUrl('');
 
@@ -606,7 +608,16 @@ const AccountList: React.FC = () => {
 
           if (statusResult.status === 'verification_required') {
             setPasswordLoginStatus('verification_required');
-            setPasswordLoginMessage(statusResult.message || '请完成人脸验证，完成后会自动继续登录');
+            if (statusResult.verification_type) {
+              setPasswordVerificationType(statusResult.verification_type);
+            }
+            setPasswordLoginMessage(
+              statusResult.message || (
+                statusResult.verification_type === 'sms'
+                  ? '请按验证页面提示主动发送短信，完成后会自动继续登录'
+                  : '请完成安全验证，完成后会自动继续登录'
+              ),
+            );
             if (statusResult.verification_url) {
               setPasswordVerificationUrl(statusResult.verification_url);
             }
@@ -1037,12 +1048,18 @@ const AccountList: React.FC = () => {
                 {passwordLoginStatus === 'verification_required' && (
                   <>
                     <ShieldCheck className="mb-3 h-12 w-12 text-amber-600" />
-                    <p className="font-bold text-amber-800">需要完成安全验证</p>
-                    <p className="mt-2 text-xs leading-5 text-gray-600">验证完成后页面会自动继续登录，请不要关闭此弹窗。</p>
+                    <p className="font-bold text-amber-800">
+                      {passwordVerificationType === 'sms' ? '需要完成短信验证' : '需要完成安全验证'}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-gray-600">
+                      {passwordVerificationType === 'sms'
+                        ? '请按验证页面提示主动发送短信，发送完成后页面会自动继续登录。'
+                        : '验证完成后页面会自动继续登录，请不要关闭此弹窗。'}
+                    </p>
                     {passwordScreenshotUrl && (
                       <img
                         src={passwordScreenshotUrl}
-                        alt="闲鱼安全验证页面"
+                        alt={passwordVerificationType === 'sms' ? '闲鱼短信验证页面' : '闲鱼安全验证页面'}
                         className="mt-4 max-h-56 max-w-full rounded-md border border-gray-200 object-contain"
                       />
                     )}
@@ -1053,7 +1070,7 @@ const AccountList: React.FC = () => {
                         rel="noreferrer"
                         className="mt-4 rounded-md bg-[#ffe100] px-4 py-2 text-xs font-bold text-[#2a2416] hover:bg-[#ffd700]"
                       >
-                        打开验证页面
+                        {passwordVerificationType === 'sms' ? '打开短信验证页面' : '打开验证页面'}
                       </a>
                     )}
                   </>
