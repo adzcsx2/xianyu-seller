@@ -145,6 +145,9 @@ class IntentDetectionTests(unittest.TestCase):
     def test_keyword_still_works(self):
         self.assertEqual(self.engine.detect_intent('最低多少钱可以拿', 'acc'), 'price')
 
+    def test_availability_question_is_not_price(self):
+        self.assertEqual(self.engine.detect_intent('你好，这个商品现在还能买吗？', 'acc'), 'default')
+
     def test_size_question_is_not_price(self):
         self.assertEqual(self.engine.detect_intent('穿多大码', 'acc'), 'default')
 
