@@ -11,6 +11,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
+  SlidersHorizontal,
   UserRound,
   Zap,
 } from 'lucide-react';
@@ -19,13 +20,15 @@ import {
   changePassword,
   createQuickPhrase,
   deleteQuickPhrase,
+  getAvailableAIModels,
   getQuickPhrases,
   getSystemSettings,
   updateQuickPhrase,
   updateSystemSettings,
 } from '../services/api';
 import { notify } from '../services/feedback';
-import { QuickPhrase, SystemSettings } from '../types';
+import { FeatureFlagDefinition, FeatureKey, QuickPhrase, SystemSettings } from '../types';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import {
   NoticeBanner,
   PageHeader,
@@ -34,7 +37,13 @@ import {
   SectionHeader,
 } from './ui';
 
-type SettingsSection = 'general' | 'ai' | 'email' | 'phrases' | 'notice';
+type SettingsSection = 'general' | 'features' | 'ai' | 'email' | 'phrases' | 'notice';
+
+const FEATURE_GROUP_LABELS: Record<string, string> = {
+  page_modules: '页面模块',
+  platform_background: '平台主动任务',
+  message_actions: '消息动作',
+};
 
 /**
  * 把后端的开关值转成布尔。
@@ -59,6 +68,7 @@ interface SettingToggleProps {
   description: string;
   checked: boolean;
   onChange: () => void;
+  disabled?: boolean;
 }
 
 const SettingToggle: React.FC<SettingToggleProps> = ({
@@ -66,6 +76,7 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
   description,
   checked,
   onChange,
+  disabled = false,
 }) => (
   <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0">
     <div className="min-w-0">
@@ -77,9 +88,10 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
       role="switch"
       aria-checked={checked}
       onClick={onChange}
+      disabled={disabled}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
         checked ? 'bg-[#ffe100]' : 'bg-gray-300'
-      }`}
+      } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
     >
       <span
         className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${
@@ -91,10 +103,24 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
 );
 
 const Settings: React.FC = () => {
+  const {
+    snapshot: featureSnapshot,
+    loading: featureLoading,
+    updating: featureUpdating,
+    error: featureError,
+    runtimeApply,
+    isAdmin,
+    load: loadFeatureFlags,
+    update: updateFeatureFlagsState,
+  } = useFeatureFlags();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+  const [featureDraft, setFeatureDraft] = useState<Partial<Record<FeatureKey, boolean>> | null>(null);
   // 快捷短语：人工客服常用话术
   const [phrases, setPhrases] = useState<QuickPhrase[]>([]);
   const [phraseForm, setPhraseForm] = useState({ category: '默认', title: '', content: '' });
@@ -104,6 +130,10 @@ const Settings: React.FC = () => {
   };
 
   useEffect(() => { loadPhrases(); }, []);
+
+  useEffect(() => {
+    if (featureSnapshot) setFeatureDraft({ ...featureSnapshot.configured });
+  }, [featureSnapshot]);
 
   const handleAddPhrase = async () => {
     if (!phraseForm.title.trim() || !phraseForm.content.trim()) return;
@@ -173,7 +203,26 @@ const Settings: React.FC = () => {
 
   const loadSettings = () => {
     setLoading(true);
-    getSystemSettings().then(setSettings).finally(() => setLoading(false));
+    getSystemSettings().then((data) => {
+      setSettings(data);
+      // 管理员已经明确要求查看 .env API Key 时，首次加载直接显示实际值；
+      // 仍可点击眼睛按钮重新隐藏。
+      if (data.ai_env_overrides?.api_key) setShowApiKey(true);
+    }).finally(() => setLoading(false));
+  };
+
+  const loadAvailableModels = async () => {
+    setModelsLoading(true);
+    setModelsError('');
+    try {
+      const result = await getAvailableAIModels();
+      setAvailableModels(result.models || []);
+      if (!result.models?.length) setModelsError('模型服务没有返回可用模型');
+    } catch (error) {
+      setModelsError(`获取模型列表失败：${(error as Error).message}`);
+    } finally {
+      setModelsLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -189,6 +238,31 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleSaveFeatures = async () => {
+    if (!featureSnapshot || !featureDraft || !isAdmin) return;
+    const changedFlags = Object.fromEntries(
+      Object.entries(featureDraft).filter(([key, value]) => (
+        value !== featureSnapshot.configured[key as FeatureKey]
+      )),
+    ) as Partial<Record<FeatureKey, boolean>>;
+    if (Object.keys(changedFlags).length === 0) {
+      notify('功能开关没有变化');
+      return;
+    }
+    try {
+      await updateFeatureFlagsState(changedFlags);
+      notify('功能开关已保存');
+    } catch (error) {
+      // Context 保留旧 snapshot；draft 也保留，方便用户修正后重试。
+      notify(`功能开关保存失败：${(error as Error).message}`);
+    }
+  };
+
+  const featureGroups = featureSnapshot?.definitions.reduce<Record<string, FeatureFlagDefinition[]>>((groups, definition) => {
+    (groups[definition.group] ||= []).push(definition);
+    return groups;
+  }, {}) || {};
+
   if (!settings) return <PageLoading label="正在加载系统设置" />;
 
   return (
@@ -201,22 +275,34 @@ const Settings: React.FC = () => {
           <>
             <button
               type="button"
-              onClick={loadSettings}
-              disabled={loading}
+              onClick={() => (activeSection === 'features' ? void loadFeatureFlags() : loadSettings())}
+              disabled={activeSection === 'features' ? featureLoading : loading}
               className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${(activeSection === 'features' ? featureLoading : loading) ? 'animate-spin' : ''}`} />
               刷新
             </button>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={saving}
-              className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? '保存中' : '保存设置'}
-            </button>
+            {activeSection === 'features' ? (
+              <button
+                type="button"
+                onClick={() => void handleSaveFeatures()}
+                disabled={!isAdmin || featureUpdating || !featureDraft}
+                className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {featureUpdating ? '保存中' : '保存功能开关'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={saving}
+                className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? '保存中' : '保存设置'}
+              </button>
+            )}
           </>
         )}
       />
@@ -227,12 +313,79 @@ const Settings: React.FC = () => {
         ariaLabel="系统设置分区"
         items={[
           { id: 'general', label: '账号与同步', icon: UserRound },
+          { id: 'features', label: '功能区', icon: SlidersHorizontal },
           { id: 'ai', label: '默认 AI 配置', icon: Sparkles },
           { id: 'email', label: '邮件服务', icon: Mail },
           { id: 'phrases', label: '快捷短语', icon: Zap },
           { id: 'notice', label: '公告与更新', icon: Megaphone },
         ]}
       />
+
+      {activeSection === 'features' && (
+        <div className="space-y-4">
+          {featureError && (
+            <NoticeBanner
+              type="error"
+              message={`${featureError}；可选业务已隐藏，聊天、账号和系统设置仍可使用。`}
+            />
+          )}
+          {featureLoading && !featureSnapshot ? (
+            <PageLoading label="正在加载功能开关" />
+          ) : !featureSnapshot ? (
+            <NoticeBanner type="warning" message="功能开关暂不可用，请刷新后重试。" />
+          ) : (
+            <>
+              {!isAdmin && (
+                <NoticeBanner type="info" message="当前账号只能查看功能状态，管理员可编辑并保存功能开关。" />
+              )}
+              {featureSnapshot.warnings.map((warning) => (
+                <NoticeBanner key={warning} type="warning" message={warning} />
+              ))}
+              {runtimeApply && (
+                <NoticeBanner
+                  type={runtimeApply === 'failed' ? 'error' : runtimeApply === 'pending' ? 'warning' : 'success'}
+                  message={`运行时应用状态：${runtimeApply}`}
+                />
+              )}
+              {Object.entries(featureGroups).map(([group, definitions]) => (
+                <section key={group} className="section-panel">
+                  <SectionHeader
+                    title={FEATURE_GROUP_LABELS[group] || group}
+                    description="配置只改变开关状态，不会删除原有账号级参数或业务配置。"
+                    icon={SlidersHorizontal}
+                  />
+                  {definitions.map((definition) => {
+                    const checked = featureDraft?.[definition.key] === true;
+                    const effective = featureSnapshot.effective[definition.key] === true;
+                    const dependencyLabels = definition.depends_on
+                      .map((key) => featureSnapshot.definitions.find(item => item.key === key)?.label || key)
+                      .join('、');
+                    return (
+                      <React.Fragment key={definition.key}>
+                        <SettingToggle
+                          title={definition.label}
+                          description={definition.description}
+                          checked={checked}
+                          onChange={() => setFeatureDraft(current => ({
+                            ...(current || featureSnapshot.configured),
+                            [definition.key]: !checked,
+                          }))}
+                          disabled={!isAdmin || featureUpdating}
+                        />
+                        <div className="border-b border-gray-100 px-4 pb-3 text-xs text-gray-500 last:border-b-0">
+                          <span>configured：{checked ? '开启' : '关闭'} · effective：{effective ? '生效' : '未生效'}</span>
+                          <span className="ml-3">风险：{definition.risk_level}</span>
+                          {dependencyLabels && <span className="ml-3">依赖：{dependencyLabels}</span>}
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </section>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {activeSection === 'general' && (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -354,15 +507,7 @@ const Settings: React.FC = () => {
               description="设置后台定时获取闲鱼商品的频率和单次范围。"
               icon={Database}
             />
-            <SettingToggle
-              title="启用商品自动同步"
-              description="定时将账号商品更新到本地商品库。"
-              checked={toBool(settings.item_sync_enabled, true)}
-              onChange={() => setSettings({
-                ...settings,
-                item_sync_enabled: !toBool(settings.item_sync_enabled, true),
-              })}
-            />
+            {featureSnapshot?.configured.item_sync_enabled === true && (
             <div className="grid gap-4 p-4 sm:grid-cols-2">
               <label>
                 <span className="field-label">同步间隔（分钟）</span>
@@ -395,6 +540,7 @@ const Settings: React.FC = () => {
                 <span className="mt-1 block text-xs text-gray-500">闲鱼接口通常每页返回 20 件商品。</span>
               </label>
             </div>
+            )}
           </section>
 
           <section className="section-panel">
@@ -403,15 +549,7 @@ const Settings: React.FC = () => {
               description="定时从卖家端拉取订单，补齐监听离线期间产生的订单。"
               icon={Database}
             />
-            <SettingToggle
-              title="启用订单自动同步"
-              description="关闭后只能在订单页手动点「拉取卖出订单」。"
-              checked={settings.order_sync_enabled !== false}
-              onChange={() => setSettings({
-                ...settings,
-                order_sync_enabled: settings.order_sync_enabled === false,
-              })}
-            />
+            {featureSnapshot?.configured.order_sync_enabled === true && (
             <div className="grid gap-4 p-4 sm:grid-cols-2">
               <label>
                 <span className="field-label">同步间隔（分钟）</span>
@@ -429,6 +567,7 @@ const Settings: React.FC = () => {
                 <span className="mt-1 block text-xs text-gray-500">最低 5 分钟，建议 30 分钟。</span>
               </label>
             </div>
+            )}
           </section>
 
           <section className="section-panel">
@@ -437,15 +576,7 @@ const Settings: React.FC = () => {
               description="定时擦亮商品重新获取搜索曝光，平台对每日次数有限制。"
               icon={Database}
             />
-            <SettingToggle
-              title="启用自动擦亮"
-              description="开启后按下方间隔自动擦亮全部商品。也可在商品页手动触发。"
-              checked={settings.auto_polish_enabled === true}
-              onChange={() => setSettings({
-                ...settings,
-                auto_polish_enabled: settings.auto_polish_enabled !== true,
-              })}
-            />
+            {featureSnapshot?.configured.auto_polish_enabled === true && (
             <div className="grid gap-4 p-4 sm:grid-cols-2">
               <label>
                 <span className="field-label">擦亮间隔（小时）</span>
@@ -463,6 +594,7 @@ const Settings: React.FC = () => {
                 <span className="mt-1 block text-xs text-gray-500">最短 1 小时，建议 6 小时。</span>
               </label>
             </div>
+            )}
           </section>
 
         </div>
@@ -512,7 +644,7 @@ const Settings: React.FC = () => {
                   ...settings,
                   announcement_source_url: e.target.value,
                 })}
-                placeholder="https://connect.corleom.com/announcement.json（留空即用此地址）"
+                placeholder="https://example.com/announcement.json（留空表示未配置）"
                 className="ios-input mt-1 w-full rounded-md px-3 py-2 text-sm"
               />
               <p className="mt-1.5 text-xs text-gray-500">
@@ -602,10 +734,15 @@ const Settings: React.FC = () => {
           />
           <div className="grid gap-4 p-4 lg:grid-cols-2">
             <label>
-              <span className="field-label">API 地址</span>
+              <span className="field-label flex items-center gap-2">
+                API 地址
+                {settings.ai_env_overrides?.base_url && (
+                  <span className="font-normal text-xs text-blue-600">已从 .env 加载</span>
+                )}
+              </span>
               <input
                 type="text"
-                value={settings.ai_api_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}
+                value={settings.ai_api_url || ''}
                 onChange={(event) => setSettings({ ...settings, ai_api_url: event.target.value })}
                 className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
                 placeholder="https://api.openai.com/v1"
@@ -616,13 +753,18 @@ const Settings: React.FC = () => {
             </label>
 
             <label>
-              <span className="field-label">API Key</span>
+              <span className="field-label flex items-center gap-2">
+                API Key
+                {settings.ai_env_overrides?.api_key && (
+                  <span className="font-normal text-xs text-blue-600">已从 .env 加载</span>
+                )}
+              </span>
               <div className="relative">
                 <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={settings.ai_api_key || ''}
-                  onChange={(event) => setSettings({ ...settings, ai_api_key: event.target.value })}
-                  className="ios-input w-full rounded-md px-3 py-2.5 pr-11 font-mono text-sm"
+                type={showApiKey ? 'text' : 'password'}
+                value={settings.ai_api_key || ''}
+                onChange={(event) => setSettings({ ...settings, ai_api_key: event.target.value })}
+                className="ios-input w-full rounded-md px-3 py-2.5 pr-11 font-mono text-sm"
                   placeholder="sk-..."
                 />
                 <button
@@ -637,18 +779,46 @@ const Settings: React.FC = () => {
             </label>
 
             <label>
-              <span className="field-label">默认模型</span>
+              <span className="field-label flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  默认模型
+                  {settings.ai_env_overrides?.model_name && (
+                    <span className="font-normal text-xs text-blue-600">已从 .env 加载</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void loadAvailableModels()}
+                  disabled={modelsLoading}
+                  className="inline-flex items-center gap-1 text-xs font-normal text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${modelsLoading ? 'animate-spin' : ''}`} />
+                  刷新模型列表
+                </button>
+              </span>
               <select
-                value={settings.ai_model || 'qwen-plus'}
+                value={settings.ai_model || ''}
                 onChange={(event) => setSettings({ ...settings, ai_model: event.target.value })}
                 className="ios-input w-full rounded-md px-3 py-2.5"
               >
-                <option value="qwen-plus">通义千问 Plus</option>
-                <option value="qwen-turbo">通义千问 Turbo</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                <option value="gpt-4">GPT-4</option>
+                {Array.from(new Set([settings.ai_model, ...availableModels].filter(Boolean))).map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+                {availableModels.length === 0 && !settings.ai_model && (
+                  <option value="">未获取到可用模型</option>
+                )}
               </select>
+              {modelsError && <span className="mt-1 block text-xs text-amber-600">{modelsError}</span>}
+              {!modelsError && availableModels.length > 0 && (
+                <span className="mt-1 block text-xs text-gray-500">已加载 {availableModels.length} 个可用模型。</span>
+              )}
             </label>
+
+            {Object.keys(settings.ai_env_overrides || {}).length > 0 && (
+              <div className="lg:col-span-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                当前值来自 `.env` 默认配置；你可以直接在页面修改并保存，保存后的页面配置会覆盖 `.env` 默认值。
+              </div>
+            )}
 
             <label className="lg:col-span-2">
               <span className="field-label">默认自动回复内容</span>
@@ -663,7 +833,7 @@ const Settings: React.FC = () => {
             <div className="lg:col-span-2">
               <NoticeBanner
                 type="info"
-                message="常用兼容服务包括阿里云 DashScope 和 OpenAI。API Key 仅保存在当前系统配置中。"
+                message="常用兼容服务包括阿里云 DashScope 和 OpenAI。API Key 可来自 .env 或当前系统配置。"
               />
             </div>
           </div>

@@ -12,10 +12,13 @@ import {
   removeKnowledgeBinding,
 } from '../services/api';
 import { confirmAction, notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { PageHeader, PageLoading } from './ui';
 import KnowledgeBaseEditorModal from './KnowledgeBaseEditorModal';
 
 const KnowledgeBase: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const knowledgeBaseEnabled = isEnabled('feature_knowledge_base_enabled');
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [bases, setBases] = useState<KnowledgeBaseSummary[]>([]);
@@ -119,6 +122,7 @@ const KnowledgeBase: React.FC = () => {
   }, [selectedAccountId, selectedItemId]);
 
   const handleAddBinding = async (base: KnowledgeBaseSummary) => {
+    if (!knowledgeBaseEnabled) return;
     if (operationKey || boundIds.has(base.id) || !selectedAccountId || !selectedItemId) return;
     setOperationKey(`bind-add:${base.id}`);
     try {
@@ -135,6 +139,7 @@ const KnowledgeBase: React.FC = () => {
   };
 
   const handleRemoveBinding = async (binding: KnowledgeBinding) => {
+    if (!knowledgeBaseEnabled) return;
     const ok = await confirmAction(
       `确认仅从当前商品移除“${binding.name}”吗？不会删除全部知识库中的内容。`,
       { title: '删除当前商品知识库', confirmLabel: '移除绑定', danger: true },
@@ -154,6 +159,7 @@ const KnowledgeBase: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    if (!knowledgeBaseEnabled) return;
     if (!createName.trim() || operationKey) return;
     setOperationKey('create-base');
     try {
@@ -172,6 +178,7 @@ const KnowledgeBase: React.FC = () => {
   };
 
   const handleDeleteBase = async (base: KnowledgeBaseSummary) => {
+    if (!knowledgeBaseEnabled) return;
     const ok = await confirmAction(
       `“${base.name}”将被全局删除，同时删除其中的事实、来源、规则、问答和 ${base.binding_count} 个商品绑定。此操作不可撤销，继续吗？`,
       { title: '删除全部知识库', confirmLabel: '确定删除', danger: true },

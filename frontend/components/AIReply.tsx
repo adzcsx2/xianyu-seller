@@ -4,10 +4,10 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  ExternalLink,
   Loader2,
   MessageSquareText,
   Play,
+  RefreshCw,
   Save,
   ShieldCheck,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { AccountDetail, AIReplySettings, AIReplyStyle, Item } from '../types';
 import {
   getAccountAISettings,
   getAccountDetails,
+  getAvailableAIModels,
   getItems,
   getAIReplyStyle,
   testAIConnection,
@@ -22,18 +23,15 @@ import {
   updateAIReplyStyle,
 } from '../services/api';
 import { notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { EmptyState, PageHeader, PageLoading, SectionHeader } from './ui';
-
-// 自建中转，兼容 OpenAI 接口，每天可领免费额度，省去用户自己找服务商配密钥。
-const FREE_TOKEN_BASE_URL = 'https://ai.corleom.com/v1';
-const FREE_TOKEN_HOME = 'https://ai.corleom.com';
 
 const defaultSettings: AIReplySettings = {
   ai_enabled: false,
-  model_name: 'qwen-plus',
+  model_name: '',
   api_key: '',
   api_key_configured: false,
-  base_url: FREE_TOKEN_BASE_URL,
+  base_url: '',
   user_agent: 'codex_cli_rs/0.0.0 (Hermes Agent)',
   context_enabled: true,
   context_message_limit: 12,
@@ -43,6 +41,8 @@ const defaultSettings: AIReplySettings = {
 const defaultReplyStyle = '语气自然、友好，略带俏皮，像真实的闲鱼卖家。优先用一到两句短句直接回答，可少量使用语气词；不要复述规则，不主动扩展买家没有询问的内容，避免客服腔、夸张承诺和连续表情。';
 
 const AIReply: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const aiReplyEnabled = isEnabled('feature_ai_reply_enabled');
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
@@ -52,6 +52,9 @@ const AIReply: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [testMessage, setTestMessage] = useState('你好，这个商品现在还能买吗？');
   const [testReply, setTestReply] = useState('');
   const [replyStyle, setReplyStyle] = useState(defaultReplyStyle);
@@ -98,7 +101,10 @@ const AIReply: React.FC = () => {
     setTestReply('');
     setShowApiKey(false);
     getAccountAISettings(selectedAccountId)
-      .then(data => setSettings({ ...defaultSettings, ...data, api_key: '' }))
+      .then(data => {
+        setSettings({ ...defaultSettings, ...data });
+        if (data.ai_env_overrides?.api_key) setShowApiKey(true);
+      })
       .catch(error => notify(error instanceof Error ? error.message : 'AI配置加载失败', 'error'))
       .finally(() => setLoading(false));
   }, [selectedAccountId]);
@@ -107,7 +113,29 @@ const AIReply: React.FC = () => {
     setSettings(current => ({ ...current, [key]: value }));
   };
 
+  const loadAvailableModels = async (cookieId = selectedAccountId) => {
+    if (!cookieId) return;
+    setModelsLoading(true);
+    setModelsError('');
+    try {
+      const result = await getAvailableAIModels(cookieId);
+      setAvailableModels(result.models || []);
+      if (!result.models?.length) setModelsError('模型服务没有返回可用模型');
+    } catch (error) {
+      setModelsError(`获取模型列表失败：${(error as Error).message}`);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setAvailableModels([]);
+    setModelsError('');
+    void loadAvailableModels();
+  }, [selectedAccountId]);
+
   const handleSave = async () => {
+    if (!aiReplyEnabled) return;
     if (!selectedAccountId) {
       notify('请先选择账号', 'warning');
       return;
@@ -121,7 +149,8 @@ const AIReply: React.FC = () => {
     try {
       await updateAccountAISettings(selectedAccountId, settings);
       const refreshed = await getAccountAISettings(selectedAccountId);
-      setSettings({ ...defaultSettings, ...refreshed, api_key: '' });
+      setSettings({ ...defaultSettings, ...refreshed });
+      if (refreshed.ai_env_overrides?.api_key) setShowApiKey(true);
       notify('人工智能回复配置已保存', 'success');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'AI配置保存失败', 'error');
@@ -131,6 +160,7 @@ const AIReply: React.FC = () => {
   };
 
   const handleTest = async () => {
+    if (!aiReplyEnabled) return;
     if (!selectedAccountId || !selectedItemId || !testMessage.trim()) {
       notify('请选择账号、真实商品并输入测试消息', 'warning');
       return;
@@ -152,6 +182,7 @@ const AIReply: React.FC = () => {
   };
 
   const handleSaveStyle = async () => {
+    if (!aiReplyEnabled) return;
     if (!replyStyle.trim()) {
       notify('回复风格不能为空', 'warning');
       return;
@@ -198,7 +229,7 @@ const AIReply: React.FC = () => {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || !selectedAccountId}
+              disabled={saving || !selectedAccountId || !aiReplyEnabled}
               className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -248,48 +279,73 @@ const AIReply: React.FC = () => {
                   icon={Bot}
                 />
                 <div className="grid gap-4 p-5 md:grid-cols-2">
-                  <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3">
+                  <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-800">
-                        没有 API Key？每天可免费领取额度
+                        请显式配置你自己的 AI 服务
                       </p>
                       <p className="mt-0.5 text-xs text-gray-600">
-                        兼容 OpenAI 接口，注册后把密钥填到下方即可直接用。
+                        系统不会内置或自动连接第三方服务；请填写兼容 OpenAI 协议的接口地址和密钥。
                       </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <a
-                        href={FREE_TOKEN_HOME}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1 rounded-md bg-brand-500 px-3 py-1.5 text-xs font-semibold text-brand-ink hover:bg-brand-600"
-                      >
-                        免费领取 token
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
                     </div>
                   </div>
                   <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">接口地址</span>
+                    <span className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      接口地址
+                      {settings.ai_env_overrides?.base_url && (
+                        <span className="text-xs font-normal text-blue-600">已从 .env 加载</span>
+                      )}
+                    </span>
                     <input
                       value={settings.base_url}
                       onChange={event => updateSetting('base_url', event.target.value)}
                       className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
-                      placeholder={FREE_TOKEN_BASE_URL}
+                      placeholder="未配置，例如 https://api.openai.com/v1"
                     />
                   </label>
                   <label>
-                    <span className="mb-1.5 block text-sm font-semibold text-gray-700">模型名称</span>
-                    <input
-                      value={settings.model_name}
+                    <span className="mb-1.5 flex items-center justify-between gap-2 text-sm font-semibold text-gray-700">
+                      <span className="flex items-center gap-2">
+                        模型名称
+                        {settings.ai_env_overrides?.model_name && (
+                          <span className="text-xs font-normal text-blue-600">已从 .env 加载</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadAvailableModels()}
+                        disabled={modelsLoading}
+                        className="inline-flex items-center gap-1 text-xs font-normal text-blue-600 hover:underline disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${modelsLoading ? 'animate-spin' : ''}`} />
+                        刷新模型列表
+                      </button>
+                    </span>
+                    <select
+                      value={settings.model_name || ''}
                       onChange={event => updateSetting('model_name', event.target.value)}
                       className="ios-input w-full rounded-md px-3 py-2.5 text-sm"
-                      placeholder="qwen-plus"
-                    />
+                    >
+                      {Array.from(new Set([settings.model_name, ...availableModels].filter(Boolean))).map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
+                      {availableModels.length === 0 && !settings.model_name && (
+                        <option value="">未获取到可用模型</option>
+                      )}
+                    </select>
+                    {modelsError && <span className="mt-1 block text-xs text-amber-600">{modelsError}</span>}
+                    {!modelsError && availableModels.length > 0 && (
+                      <span className="mt-1 block text-xs text-gray-500">已加载 {availableModels.length} 个可用模型。</span>
+                    )}
                   </label>
                   <label className="md:col-span-2">
                     <span className="mb-1.5 flex items-center justify-between gap-3 text-sm font-semibold text-gray-700">
-                      API Key
+                      <span className="flex items-center gap-2">
+                        API Key
+                        {settings.ai_env_overrides?.api_key && (
+                          <span className="text-xs font-normal text-blue-600">已从 .env 加载</span>
+                        )}
+                      </span>
                       {settings.api_key_configured && !settings.api_key && (
                         <span className="flex items-center gap-1 text-xs font-medium text-emerald-700">
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -339,7 +395,7 @@ const AIReply: React.FC = () => {
                   <textarea value={replyStyle} onChange={event => setReplyStyle(event.target.value)} className="ios-input min-h-32 w-full resize-y rounded-md px-3 py-2.5 text-sm leading-6" placeholder={defaultReplyStyle} />
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-xs leading-5 text-gray-500">示例：自然、友好、略带俏皮；一到两句短答；不夸张承诺、不连续使用表情。</p>
-                    <button type="button" onClick={() => void handleSaveStyle()} disabled={styleSaving} className="ios-btn-secondary flex items-center gap-2 rounded-md px-3 py-2 text-sm">
+                    <button type="button" onClick={() => void handleSaveStyle()} disabled={styleSaving || !aiReplyEnabled} className="ios-btn-secondary flex items-center gap-2 rounded-md px-3 py-2 text-sm">
                       {styleSaving && <Loader2 className="h-4 w-4 animate-spin" />}保存回复风格
                     </button>
                   </div>
@@ -428,7 +484,7 @@ const AIReply: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleTest}
-                    disabled={testing || !settings.ai_enabled || !selectedItemId}
+                    disabled={testing || !settings.ai_enabled || !selectedItemId || !aiReplyEnabled}
                     className="ios-btn-primary mt-3 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
                   >
                     {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}

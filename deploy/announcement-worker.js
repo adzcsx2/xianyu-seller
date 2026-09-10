@@ -1,7 +1,7 @@
 /**
- * 闲鱼智控 —— 公告与版本发布服务
+ * 闲鱼卖家 —— 公告与版本发布服务
  *
- * 部署在 connect.corleom.com，供各客户端拉取公告和检查更新。
+ * 部署在部署者自己的公告域名，供客户端拉取公告和检查更新。
  *
  * 路由：
  *   GET  /announcement.json  公开，客户端定时拉取（无需鉴权）
@@ -131,7 +131,7 @@ const ADMIN_HTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>公告发布 · 闲鱼智控</title>
+<title>公告发布 · 闲鱼卖家</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f6f7;color:#1f2328}
@@ -166,7 +166,7 @@ textarea{min-height:64px;resize:vertical}
     <div class="row">
       <div><label>最新版本号</label><input id="ver" placeholder="1.1.0">
         <div class="hint">高于客户端本地版本才会提示更新</div></div>
-      <div><label>下载地址</label><input id="url" placeholder="https://github.com/23Star/xianyu-super-butler/releases">
+      <div><label>下载地址</label><input id="url" placeholder="https://github.com/adzcsx2/xianyu-seller/releases">
         <div class="hint">必须 https 开头</div></div>
     </div>
     <label>更新说明</label><textarea id="notes" placeholder="修复了哪些问题"></textarea>

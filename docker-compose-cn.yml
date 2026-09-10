@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-cn
-    image: xianyu-super-butler:latest
-    container_name: xianyu-super-butler
+    image: xianyu-seller:latest
+    container_name: xianyu-seller
     restart: unless-stopped
     user: "0:0"
     ports:
@@ -35,24 +35,29 @@ services:
       EMAIL_VERIFICATION_ENABLED: "${EMAIL_VERIFICATION_ENABLED:-true}"
       CAPTCHA_ENABLED: "${CAPTCHA_ENABLED:-true}"
       TOKEN_EXPIRE_TIME: "${TOKEN_EXPIRE_TIME:-86400}"
+      # 兼容期默认输入；功能区 system_settings 优先，不覆盖已保存值。
       AUTO_REPLY_ENABLED: "${AUTO_REPLY_ENABLED:-true}"
       AUTO_DELIVERY_ENABLED: "${AUTO_DELIVERY_ENABLED:-true}"
       AUTO_DELIVERY_TIMEOUT: "${AUTO_DELIVERY_TIMEOUT:-30}"
       API_CARD_TIMEOUT: "${API_CARD_TIMEOUT:-10}"
       BATCH_DATA_LOCK_TIMEOUT: "${BATCH_DATA_LOCK_TIMEOUT:-5}"
       AI_REPLY_ENABLED: "${AI_REPLY_ENABLED:-false}"
-      DEFAULT_AI_MODEL: "${DEFAULT_AI_MODEL:-qwen-plus}"
+      API_KEY: "${API_KEY:-}"
+      MODEL_BASE_URL: "${MODEL_BASE_URL:-}"
+      MODEL_NAME: "${MODEL_NAME:-}"
+      DEFAULT_AI_MODEL: "${DEFAULT_AI_MODEL:-}"
       DEFAULT_AI_BASE_URL: "${DEFAULT_AI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
       AI_REQUEST_TIMEOUT: "${AI_REQUEST_TIMEOUT:-30}"
       AI_MAX_TOKENS: "${AI_MAX_TOKENS:-100}"
       WEBSOCKET_URL: "${WEBSOCKET_URL:-wss://wss-goofish.dingtalk.com/}"
       HEARTBEAT_INTERVAL: "${HEARTBEAT_INTERVAL:-15}"
       HEARTBEAT_TIMEOUT: "${HEARTBEAT_TIMEOUT:-5}"
+      # 仅用于 Token 按需判断/兼容配置，不是周期刷新开关；开关由 system_settings 管理。
       TOKEN_REFRESH_INTERVAL: "${TOKEN_REFRESH_INTERVAL:-3600}"
       TOKEN_RETRY_INTERVAL: "${TOKEN_RETRY_INTERVAL:-300}"
       MESSAGE_EXPIRE_TIME: "${MESSAGE_EXPIRE_TIME:-300000}"
     networks:
-      - xianyu-network
+      - xianyu-seller-network
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -70,7 +75,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: xianyu-super-butler-nginx
+    container_name: xianyu-seller-nginx
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -82,10 +87,10 @@ services:
       xianyu-app:
         condition: service_healthy
     networks:
-      - xianyu-network
+      - xianyu-seller-network
     profiles:
       - with-nginx
 
 networks:
-  xianyu-network:
+  xianyu-seller-network:
     driver: bridge

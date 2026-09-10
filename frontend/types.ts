@@ -1,4 +1,48 @@
 
+export type FeatureKey =
+  | 'feature_items_enabled'
+  | 'item_sync_enabled'
+  | 'auto_polish_enabled'
+  | 'feature_orders_enabled'
+  | 'order_sync_enabled'
+  | 'delivery_timeout_alert_enabled'
+  | 'auto_delivery_enabled'
+  | 'feature_cards_enabled'
+  | 'feature_buyer_interaction_enabled'
+  | 'feature_auto_reply_enabled'
+  | 'feature_ai_reply_enabled'
+  | 'feature_knowledge_base_enabled'
+  | 'feature_product_automation_enabled'
+  | 'account_profile_auto_sync_enabled'
+  | 'scheduled_token_refresh_enabled'
+  | 'browser_cookie_refresh_enabled';
+
+export interface FeatureFlagDefinition {
+  key: FeatureKey;
+  group: string;
+  label: string;
+  description: string;
+  depends_on: FeatureKey[];
+  ui_targets: string[];
+  risk_level: string;
+}
+
+export interface FeatureFlagSnapshot {
+  revision: number;
+  configured: Record<FeatureKey, boolean>;
+  effective: Record<FeatureKey, boolean>;
+  definitions: FeatureFlagDefinition[];
+  warnings: string[];
+}
+
+export type FeatureFlagPatch = Partial<Record<FeatureKey, boolean>>;
+export type FeatureRuntimeApplyStatus = 'applied' | 'pending' | 'failed';
+
+export interface FeatureFlagsUpdateResponse extends FeatureFlagSnapshot {
+  changed_keys: FeatureKey[];
+  runtime_apply: FeatureRuntimeApplyStatus;
+}
+
 // API Response Bases
 export interface ApiResponse {
   success?: boolean;
@@ -498,6 +542,8 @@ export interface OrderAnalytics {
 export interface SystemSettings {
   ai_model?: string;
   ai_api_key?: string;
+  ai_api_url?: string;
+  ai_env_overrides?: Partial<Record<'api_key' | 'base_url' | 'model_name', boolean>>;
   ai_base_url?: string;
   default_reply?: string;
   registration_enabled?: boolean;
@@ -533,6 +579,8 @@ export interface AIReplySettings {
   model_name: string;
   api_key: string;
   api_key_configured?: boolean;
+  api_key_source?: 'env' | 'account' | string;
+  ai_env_overrides?: Partial<Record<'api_key' | 'base_url' | 'model_name', boolean>>;
   base_url: string;
   user_agent?: string;
   context_enabled: boolean;

@@ -33,7 +33,7 @@ This file is the high-density project router for AI coding. It was created by
 - Run headless browser E2E: `python scripts/run_tests.py --suite e2e --database snapshot`.
 - Run the complete local gate: `python scripts/run_tests.py --quality --database snapshot`.
 - Frontend checks are part of `--quality`; the runner invokes the local TypeScript and detached Vite build directly through Node to avoid platform-specific npm child-shell issues. Output stays below `logs/test-artifacts/` and does not replace `static/`.
-- All application, diagnostic, and test log files must be written below the repository-root `logs/` directory. Never create an intentional log file in the root, `.tmp/`, a source directory, or another runtime directory.
+- All initialization, hook, application, diagnostic, test, build, and audit log files must be written below the repository-root `logs/` directory. Never create an intentional log file in the root, `.tmp/`, a source directory, `/docs`, or another runtime directory.
 - Knowledge-base contents are private business data. Never stage, commit, reproduce in documentation, or transmit that content externally without an explicit request covering the exact transfer. Store it only in the ignored `data/` runtime database or ignored local files below `app/knowledge/`; keep implementation code versioned.
 - All real account login and operating data is private: cookies, passwords, tokens, browser profiles, storage/session state, QR codes, captcha artifacts, account identifiers, messages, orders, and exports must never be staged, committed, quoted, copied into fixtures/docs, or transmitted externally. Store them only in ignored runtime paths such as `data/`, `browser_data/`, and `slider_cookies/`; use clearly synthetic test/example values.
 - There is no verified repository ESLint or Ruff command; do not claim one passed.
@@ -76,7 +76,8 @@ For any business capability, data access, integration, diagnosis, acceptance, or
 - Keep the project-local `.worktree/` directory. All new Git worktrees must be created at `<project-root>/.worktree/<worktree-name>`; do not create sibling worktrees or default to an external directory. The root `.gitignore` contains `/.worktree/`.
 - Project hooks are execution gates, not rule sources. The installed Windows hooks are `.claude/hooks/final-rule-audit.ps1` and `.codex/hooks/final-rule-audit.ps1`, registered on `Stop`; they fail open and never edit business code.
 - The current init standard does not create `.ai/skills`, configured mirrors, `sync-project-skills.sh`, or `PostToolUse` mirror refresh hooks. Do not add them unless explicitly requested.
-- `AGENT.md` is the cross-tool project guide. Because no root `AGENTS.md` existed during initialization, Copilot instructions live only in `.github/copilot-instructions.md`; do not maintain both Copilot locations.
+- The legacy `AGENT.md` was read as migration input and is not the active standard. Because `.github/copilot-instructions.md` is the existing sole Copilot project configuration, keep it as the only Copilot location; do not create or maintain a second root `AGENTS.md` for Copilot.
+- Existing project AI guidance, API-first artifacts, and project hooks were upgraded or verified against the current init standard; this standard constrains future coding and does not authorize unrelated source refactors.
 
 ## Git
 

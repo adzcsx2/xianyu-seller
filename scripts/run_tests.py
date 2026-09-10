@@ -365,7 +365,7 @@ def _print_suites() -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="闲鱼超级管家自动化测试入口")
+    parser = argparse.ArgumentParser(description="闲鱼卖家自动化测试入口")
     parser.add_argument("--suite", choices=("core", "e2e", "all"), default="core")
     parser.add_argument("--database", choices=("temp", "snapshot", "live"), default="snapshot")
     parser.add_argument("--live-database", type=Path, default=DEFAULT_LIVE_DATABASE)

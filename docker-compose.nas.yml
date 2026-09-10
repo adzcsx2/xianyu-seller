@@ -1,4 +1,4 @@
-# 闲鱼智控 —— NAS / 低配设备专用部署配置（零构建）
+# 闲鱼卖家 —— NAS / 低配设备专用部署配置（零构建）
 #
 # 适用于飞牛 fnOS、群晖、威联通、软路由等设备。
 #
@@ -17,8 +17,8 @@
 
 services:
   xianyu-app:
-    image: ghcr.io/23star/xianyu-super-butler:latest
-    container_name: xianyu-super-butler
+    image: ghcr.io/adzcsx2/xianyu-seller:latest
+    container_name: xianyu-seller
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -39,9 +39,13 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin123
 
+      # 兼容期默认输入；功能区 system_settings 优先，不覆盖已保存值。
       AUTO_REPLY_ENABLED: "true"
       AUTO_DELIVERY_ENABLED: "true"
       AI_REPLY_ENABLED: "false"
+      API_KEY: "${API_KEY:-}"
+      MODEL_BASE_URL: "${MODEL_BASE_URL:-}"
+      MODEL_NAME: "${MODEL_NAME:-}"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s

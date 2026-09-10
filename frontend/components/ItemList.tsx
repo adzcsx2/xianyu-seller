@@ -41,6 +41,7 @@ import {
   updateShippingRule,
 } from '../services/api';
 import { confirmAction } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import DeliveryProtection from './DeliveryProtection';
 import GeneralDeliveryRules from './GeneralDeliveryRules';
 import {EmptyState, NoticeBanner, PageHeader, PageLoading, PageTabs} from './ui';
@@ -177,6 +178,11 @@ const Toggle: React.FC<{
 );
 
 const ItemList: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const itemsEnabled = isEnabled('feature_items_enabled');
+  const itemSyncEnabled = isEnabled('item_sync_enabled');
+  const autoPolishEnabled = isEnabled('auto_polish_enabled');
+  const autoDeliveryEnabled = isEnabled('auto_delivery_enabled');
   const [items, setItems] = useState<Item[]>([]);
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -356,6 +362,7 @@ const ItemList: React.FC = () => {
   }, []);
 
   const handleSync = async () => {
+    if (!itemSyncEnabled) return;
     if (!selectedAccount) {
       setNotice({ type: 'error', message: '请先选择需要同步的账号' });
       return;
@@ -377,6 +384,7 @@ const ItemList: React.FC = () => {
 
   // 擦亮把商品重新推到搜索前列，平台对每日次数有限制，超出的会在结果里标记失败
   const handlePolish = async () => {
+    if (!autoPolishEnabled) return;
     setPolishing(true);
     setNotice(null);
     try {
@@ -391,11 +399,13 @@ const ItemList: React.FC = () => {
   };
 
   const openManualModal = () => {
+    if (!itemsEnabled) return;
     setManualForm({ ...emptyManualItem, cookieId: selectedAccount || accounts[0]?.id || '' });
     setShowManualModal(true);
   };
 
   const handleCreateManualItem = async () => {
+    if (!itemsEnabled) return;
     if (!manualForm.cookieId || !manualForm.itemId.trim() || !manualForm.title.trim()) {
       setNotice({ type: 'error', message: '账号、商品 ID 和商品标题为必填项' });
       return;
@@ -428,6 +438,7 @@ const ItemList: React.FC = () => {
   };
 
   const handleSaveDetail = async () => {
+    if (!itemsEnabled) return;
     if (!detailItem) return;
     const key = itemKey(detailItem);
     setSavingKey(key);
@@ -446,6 +457,7 @@ const ItemList: React.FC = () => {
   };
 
   const openDelivery = async (item: Item) => {
+    if (!autoDeliveryEnabled) return;
     const legacyRule = ruleMap.get(itemKey(item));
     setDeliveryItem(item);
     setDeliveryLoading(true);
@@ -518,6 +530,7 @@ const ItemList: React.FC = () => {
   };
 
   const handleSaveDelivery = async () => {
+    if (!autoDeliveryEnabled) return;
     if (!deliveryItem) return;
     const variantsToSave = deliveryForm.isMultiSpec
       ? deliveryForm.variants
@@ -583,6 +596,7 @@ const ItemList: React.FC = () => {
   };
 
   const handleToggleDelivery = async (item: Item) => {
+    if (!autoDeliveryEnabled) return;
     const key = itemKey(item);
     const configSummary = deliveryConfigMap.get(key);
     const legacyRule = ruleMap.get(key);
@@ -651,6 +665,7 @@ const ItemList: React.FC = () => {
     item: Item,
     field: 'multi_quantity_delivery',
   ) => {
+    if (!autoDeliveryEnabled) return;
     const key = itemKey(item);
     const enabled = !Boolean(item[field]);
     setSavingKey(key);
@@ -742,14 +757,17 @@ const ItemList: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={openManualModal}
-                className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm"
-              >
-                <Plus className="h-4 w-4" />
-                手动添加
-              </button>
+              {itemsEnabled && (
+                <button
+                  type="button"
+                  onClick={openManualModal}
+                  className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  手动添加
+                </button>
+              )}
+              {itemSyncEnabled && (
               <button
                 type="button"
                 onClick={handleSync}
@@ -760,6 +778,8 @@ const ItemList: React.FC = () => {
                 <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
                 {syncing ? '正在同步' : '同步商品'}
               </button>
+              )}
+              {autoPolishEnabled && (
               <button
                 type="button"
                 onClick={handlePolish}
@@ -770,6 +790,7 @@ const ItemList: React.FC = () => {
                 <Sparkles className={`h-4 w-4 ${polishing ? 'animate-pulse' : ''}`} />
                 {polishing ? '正在擦亮' : '一键擦亮'}
               </button>
+              )}
             </div>
           </div>
 
@@ -892,16 +913,18 @@ const ItemList: React.FC = () => {
                           {/* 开关配文字标签：这一列和隔壁「商品能力」列各有一个开关，
                               两者都靠右对齐时纵向几乎连成一条线，用户会误以为是一组。 */}
                           <div className="flex flex-none flex-col items-center gap-1">
-                            <Toggle
-                              checked={deliveryEnabled}
-                              disabled={busy}
-                              label={`${item.item_title || item.item_id} 自动发货`}
-                              onChange={() => handleToggleDelivery(item)}
-                            />
+                            {autoDeliveryEnabled && (
+                              <Toggle
+                                checked={deliveryEnabled}
+                                disabled={busy}
+                                label={`${item.item_title || item.item_id} 自动发货`}
+                                onChange={() => handleToggleDelivery(item)}
+                              />
+                            )}
                             <span className="text-[10px] font-semibold text-gray-500">总开关</span>
                           </div>
                         </div>
-                        <button
+                        {autoDeliveryEnabled && <button
                           type="button"
                           onClick={() => openDelivery(item)}
                           disabled={busy}
@@ -909,7 +932,7 @@ const ItemList: React.FC = () => {
                         >
                           <Settings2 className="h-4 w-4" />
                           {deliveryConfigured ? '编辑发货策略' : '配置自动发货'}
-                        </button>
+                        </button>}
                       </div>
 
                       {/* 商品能力列：三项里只有「多数量」可点，另两项是只读状态。
@@ -931,12 +954,14 @@ const ItemList: React.FC = () => {
                           <span className="text-xs font-semibold text-gray-600" title="买家一次买 N 件时是否发 N 份">
                             多数量
                           </span>
-                          <Toggle
-                            checked={Boolean(item.multi_quantity_delivery)}
-                            disabled={busy}
-                            label={`${item.item_title || item.item_id} 多数量发货`}
-                            onChange={() => toggleSetting(item, 'multi_quantity_delivery')}
-                          />
+                          {autoDeliveryEnabled && (
+                            <Toggle
+                              checked={Boolean(item.multi_quantity_delivery)}
+                              disabled={busy}
+                              label={`${item.item_title || item.item_id} 多数量发货`}
+                              onChange={() => toggleSetting(item, 'multi_quantity_delivery')}
+                            />
+                          )}
                         </div>
                         {/* 详情状态属于「商品能力」而非「操作」，放在本列末尾，
                             避免和操作按钮挤在同一格造成表头与内容错位 */}
@@ -1024,11 +1049,11 @@ const ItemList: React.FC = () => {
               title="暂无商品数据"
               description="先选择闲鱼账号同步在售商品，也可以手动添加商品并直接配置自动发货。"
               icon={ShoppingBag}
-              action={(
+                action={itemsEnabled ? (
                 <button type="button" onClick={openManualModal} className="ios-btn-secondary rounded-md px-4 py-2 text-sm">
                   手动添加商品
                 </button>
-              )}
+                ) : undefined}
             />
           )}
         </section>

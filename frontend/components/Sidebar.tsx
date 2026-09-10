@@ -18,6 +18,8 @@ import {
   Info,
 } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
+import { isFeaturePageEnabled } from '../lib/featureRegistry';
 
 interface SidebarProps {
   activeTab: string;
@@ -28,6 +30,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mobileOpen, onMobileClose }) => {
+  const { snapshot: featureSnapshot } = useFeatureFlags();
   const menuGroups = [
     {
       label: '经营概览',
@@ -96,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
             <span className="text-lg font-black text-[#2a2416]">闲</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-extrabold text-[var(--text)]">闲鱼超级管家</p>
+            <p className="truncate text-base font-extrabold text-[var(--text)]">闲鱼卖家</p>
             <p className="mt-0.5 text-[11px] font-medium text-[var(--text-soft)]">运营工作台</p>
           </div>
           <button type="button" onClick={onMobileClose} className="rounded-full p-2 hover:bg-[var(--surface-hover)] lg:hidden" aria-label="关闭导航">
@@ -109,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
             <div key={group.label} className={groupIndex === 0 ? '' : 'mt-5'}>
               <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--text-soft)]">{group.label}</p>
               <div className="space-y-1">
-                {group.items.map((item) => {
+                {group.items.filter(item => isFeaturePageEnabled(featureSnapshot, item.id)).map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
                   return (

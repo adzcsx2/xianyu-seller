@@ -12,7 +12,7 @@
 - Plan first for ambiguous work, changes spanning 3+ source files or modules, new dependencies/configuration, or public API, model, route, permission, persistence, or directory changes.
 - Keep new files focused and preferably below 500 lines. Do not perform unrelated refactoring.
 - Use `python scripts/run_tests.py` as the automation entry point: `--suite core --database snapshot` for normal regression, `--suite e2e --database snapshot` for headless browser behavior, and `--quality --database snapshot` for the complete local gate. The runner invokes TypeScript and the detached Vite build directly through Node; no repository ESLint or Ruff command is configured.
-- Put every application, diagnostic, and test log file below the repository-root `logs/` directory. Do not intentionally write logs to the root, `.tmp/`, or source directories.
+- Put every initialization, hook, application, diagnostic, test, build, and audit log file below the repository-root `logs/` directory. Do not intentionally write logs to the root, `.tmp/`, `/docs`, or source directories.
 - Treat knowledge-base contents as private business data: never stage, commit, reproduce, or transmit them without an explicit request for that exact transfer. Store them only in ignored runtime data under `data/` or ignored local files under `app/knowledge/`; keep knowledge implementation code versioned.
 - Treat every real account's login and operating data as private, including cookies, passwords, tokens, browser profiles, storage/session state, QR/captcha artifacts, account identifiers, messages, orders, and exports. Never stage, commit, quote, place real values in fixtures/docs, or transmit them. Keep them in ignored runtime paths such as `data/`, `browser_data/`, and `slider_cookies/`; examples must be synthetic.
 - Production code in `app/`, `utils/`, `Start.py`, and frontend source must not use Mock/Stub/Spy data or test-only imports; tests may use `unittest.mock`.
@@ -28,6 +28,7 @@
 - All new Git worktrees must use `<project-root>/.worktree/<worktree-name>`; the root `.gitignore` ignores `/.worktree/`.
 - If final-rule-audit hooks are present, reread applicable rules and audit modified files and minimal verification before replying; fix violations first. The current init standard does not use `.ai/skills`, mirrors, `sync-project-skills.sh`, or `PostToolUse` refresh hooks.
 - Copilot instructions are kept only here; do not also create or maintain a root `AGENTS.md` for Copilot configuration.
+- The legacy `AGENT.md` is migration input only and is not the active project rule source.
 - Do not commit secrets, runtime databases, logs, browser state, or user data. Do not change remotes or force-push without explicit authorization.
 - Use concise Chinese Conventional Commit messages when committing and never add AI attribution or a `Co-Authored-By` line.
 - No direct child Git repositories were detected during initialization; if that changes, keep child commits and indexes isolated from the root.

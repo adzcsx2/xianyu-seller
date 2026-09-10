@@ -1,4 +1,5 @@
 import asyncio
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -511,15 +512,28 @@ class AIReplyEngineTests(unittest.TestCase):
         self.assertNotIn("source_refs", system_text)
         self.assertLess(system_text.index("<internal_product_rules>"), system_text.index("安全边界："))
 
-    def test_public_settings_never_return_api_key(self):
-        result = _public_ai_reply_settings({
-            "ai_enabled": True,
-            "api_key": "top-secret",
-            "model_name": "test-model",
-        })
+    def test_public_settings_never_return_account_api_key(self):
+        with patch.dict(os.environ, {"API_KEY": ""}):
+            result = _public_ai_reply_settings({
+                "ai_enabled": True,
+                "api_key": "top-secret",
+                "model_name": "test-model",
+            })
 
         self.assertEqual(result["api_key"], "")
         self.assertTrue(result["api_key_configured"])
+
+    def test_public_settings_return_deployment_api_key_for_configuration_screen(self):
+        with patch.dict(os.environ, {"API_KEY": "env-key"}):
+            result = _public_ai_reply_settings({
+                "ai_enabled": True,
+                "api_key": "env-key",
+                "model_name": "test-model",
+            })
+
+        self.assertEqual(result["api_key"], "env-key")
+        self.assertEqual(result["api_key_source"], "env")
+        self.assertTrue(result["ai_env_overrides"]["api_key"])
 
 
 class AIReplyAsyncTests(unittest.IsolatedAsyncioTestCase):

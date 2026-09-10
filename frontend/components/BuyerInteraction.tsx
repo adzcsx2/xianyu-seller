@@ -10,6 +10,7 @@ import {
   BuyerInteractionFlags,
 } from '../services/api';
 import { notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { AccountDetail, SystemSettings } from '../types';
 import { NoticeBanner, PageHeader, PageLoading, SectionHeader } from './ui';
 
@@ -44,6 +45,8 @@ const INTERVAL_OPTIONS = [
  * 用起来不好找。单独成页，顺便把默认评价文案也放进来——原先每单都要重新手打。
  */
 const BuyerInteraction: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const featureBuyerInteractionEnabled = isEnabled('feature_buyer_interaction_enabled');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,6 +79,7 @@ const BuyerInteraction: React.FC = () => {
     cookieId: string,
     key: keyof BuyerInteractionFlags,
   ) => {
+    if (!featureBuyerInteractionEnabled) return;
     const current = flagsByAccount[cookieId] ?? {
       auto_rate_enabled: false,
       auto_flower_enabled: false,
@@ -95,6 +99,7 @@ const BuyerInteraction: React.FC = () => {
   useEffect(() => { load(); }, []);
 
   const handleSave = async () => {
+    if (!featureBuyerInteractionEnabled) return;
     if (!settings) return;
     const template = (settings.auto_rate_template || '').trim();
     if (!template) {
@@ -157,7 +162,7 @@ const BuyerInteraction: React.FC = () => {
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={saving}
+              disabled={saving || !featureBuyerInteractionEnabled}
               className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm"
             >
               <Save className="h-4 w-4" />
@@ -217,6 +222,7 @@ const BuyerInteraction: React.FC = () => {
                                 SWITCH_LABELS[key]
                               }`}
                               onClick={() => void toggleAccountFlag(account.id, key)}
+                              disabled={!featureBuyerInteractionEnabled}
                               className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
                                 flags[key] ? 'bg-[#ffe100]' : 'bg-gray-300'
                               }`}

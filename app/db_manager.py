@@ -21,6 +21,13 @@ from app.specification import (
     canonicalize_specification,
     specification_text,
 )
+from app.feature_flags import (
+    FEATURE_FLAG_REGISTRY,
+    FeatureFlagSnapshot,
+    FeatureRevisionConflict,
+)
+from app.brand_migration import migrate_legacy_service_defaults
+from app.ai_config import resolve_ai_config
 
 
 # 回复风格只描述表达方式；商品价格、发货和其他业务规则必须进入知识库规则。
@@ -210,9 +217,9 @@ class DBManager:
             CREATE TABLE IF NOT EXISTS ai_reply_settings (
                 cookie_id TEXT PRIMARY KEY,
                 ai_enabled BOOLEAN DEFAULT FALSE,
-                model_name TEXT DEFAULT 'qwen-plus',
+                model_name TEXT DEFAULT '',
                 api_key TEXT,
-                base_url TEXT DEFAULT 'https://ai.corleom.com/v1',
+                base_url TEXT DEFAULT '',
                 user_agent TEXT,
                 max_discount_percent INTEGER DEFAULT 10,
                 max_discount_amount INTEGER DEFAULT 100,
@@ -958,6 +965,8 @@ class DBManager:
 
             # 执行数据库迁移
             self._migrate_database(cursor)
+            migrate_legacy_service_defaults(cursor)
+            self._ensure_feature_flag_settings(cursor)
 
             self.conn.commit()
             self._ensure_global_knowledge_v2_migrated()
@@ -2687,8 +2696,8 @@ class DBManager:
                 exists = cursor.fetchone() is not None
                 values = (
                     bool(settings.get('ai_enabled', False)),
-                    settings.get('model_name', 'qwen-plus'),
-                    settings.get('base_url', 'https://ai.corleom.com/v1'),
+                    settings.get('model_name', ''),
+                    settings.get('base_url', ''),
                     settings.get('user_agent', ''),
                     bool(settings.get('context_enabled', True)),
                     max(2, min(30, int(settings.get('context_message_limit', 12)))),
@@ -2716,8 +2725,8 @@ class DBManager:
         则从系统设置中读取全局AI配置作为默认值
         """
         # 默认值常量，用于判断是否使用系统设置
-        DEFAULT_BASE_URL = 'https://ai.corleom.com/v1'
-        DEFAULT_MODEL = 'qwen-plus'
+        DEFAULT_BASE_URL = ''
+        DEFAULT_MODEL = ''
         
         with self.lock:
             try:
@@ -2734,25 +2743,29 @@ class DBManager:
                 
                 # 获取系统级别的AI设置作为默认值
                 system_api_key = self.get_system_setting('ai_api_key') or ''
-                system_base_url = self.get_system_setting('ai_api_url') or DEFAULT_BASE_URL
+                system_base_url = self.get_system_setting('ai_api_url') or ''
                 system_model = self.get_system_setting('ai_model') or DEFAULT_MODEL
                 
                 if result:
-                    # 账号有设置，但如果api_key/base_url/model_name为空或等于默认值，使用系统设置
+                    # 账号有设置时优先使用账号值；为空时才回退到系统设置/环境变量默认值。
                     account_model = result[1]
                     account_api_key = result[2]
                     account_base_url = result[3]
                     
-                    # 如果账号值为空或等于硬编码默认值，则使用系统设置
-                    use_model = account_model if (account_model and account_model != DEFAULT_MODEL) else system_model
+                    use_model = account_model or system_model
                     use_api_key = account_api_key if account_api_key else system_api_key
-                    use_base_url = account_base_url if (account_base_url and account_base_url != DEFAULT_BASE_URL) else system_base_url
+                    use_base_url = account_base_url or system_base_url
+                    resolved = resolve_ai_config(
+                        api_key=use_api_key,
+                        base_url=use_base_url,
+                        model_name=use_model,
+                    )
                     
                     return {
                         'ai_enabled': bool(result[0]),
-                        'model_name': use_model,
-                        'api_key': use_api_key,
-                        'base_url': use_base_url,
+                        'model_name': resolved['model_name'],
+                        'api_key': resolved['api_key'],
+                        'base_url': resolved['base_url'],
                         'user_agent': result[4] or '',
                         'max_discount_percent': result[5],
                         'max_discount_amount': result[6],
@@ -2764,11 +2777,16 @@ class DBManager:
                     }
                 else:
                     # 账号没有设置，使用系统设置作为默认值
+                    resolved = resolve_ai_config(
+                        api_key=system_api_key,
+                        base_url=system_base_url,
+                        model_name=system_model,
+                    )
                     return {
                         'ai_enabled': False,
-                        'model_name': system_model,
-                        'api_key': system_api_key,
-                        'base_url': system_base_url,
+                        'model_name': resolved['model_name'],
+                        'api_key': resolved['api_key'],
+                        'base_url': resolved['base_url'],
                         'user_agent': '',
                         'max_discount_percent': 10,
                         'max_discount_amount': 100,
@@ -2780,11 +2798,12 @@ class DBManager:
                     }
             except Exception as e:
                 logger.error(f"获取AI回复设置失败: {e}")
+                resolved = resolve_ai_config(api_key='', base_url='', model_name='')
                 return {
                     'ai_enabled': False,
-                    'model_name': 'qwen-plus',
-                    'api_key': '',
-                    'base_url': 'https://ai.corleom.com/v1',
+                    'model_name': resolved['model_name'],
+                    'api_key': resolved['api_key'],
+                    'base_url': resolved['base_url'],
                     'user_agent': '',
                     'max_discount_percent': 10,
                     'max_discount_amount': 100,
@@ -3678,6 +3697,101 @@ class DBManager:
                 return False
 
     # -------------------- 系统设置操作 --------------------
+    def _ensure_feature_flag_settings(self, cursor):
+        """只为缺失的功能开关和 revision 建立兼容默认。"""
+        for definition in FEATURE_FLAG_REGISTRY.definitions():
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO system_settings (key, value, description)
+                VALUES (?, ?, ?)
+                """,
+                (definition.key, "true" if definition.default else "false", definition.description),
+            )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO system_settings (key, value, description)
+            VALUES ('feature_flags_revision', '0', '功能开关配置版本')
+            """
+        )
+
+    def _read_feature_flags_with_cursor(self, cursor) -> FeatureFlagSnapshot:
+        values = {}
+        warnings = []
+        for definition in FEATURE_FLAG_REGISTRY.definitions():
+            cursor.execute(
+                "SELECT value FROM system_settings WHERE key = ?",
+                (definition.key,),
+            )
+            row = cursor.fetchone()
+            value, warning = FEATURE_FLAG_REGISTRY.parse_database_value(
+                definition.key, row[0] if row else None
+            )
+            values[definition.key] = value
+            if warning:
+                warnings.append(warning)
+
+        cursor.execute(
+            "SELECT value FROM system_settings WHERE key = 'feature_flags_revision'"
+        )
+        revision_row = cursor.fetchone()
+        try:
+            revision = int(revision_row[0]) if revision_row else 0
+            if revision < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            revision = 0
+            warnings.append("invalid stored feature flags revision; using 0")
+        return FEATURE_FLAG_REGISTRY.build_snapshot(values, revision, tuple(warnings))
+
+    def get_feature_flags(self) -> FeatureFlagSnapshot:
+        """读取完整的 configured/effective 功能开关 snapshot。"""
+        with self.lock:
+            return self._read_feature_flags_with_cursor(self.conn.cursor())
+
+    def update_feature_flags_atomic(
+        self, patch: dict[str, bool], expected_revision: int
+    ) -> FeatureFlagSnapshot:
+        """在一个 SQLite transaction 中合并并提交功能开关 patch。"""
+        validated = FEATURE_FLAG_REGISTRY.validate_patch(patch)
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise FeatureRevisionConflict(expected_revision, self.get_feature_flags().revision)
+
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                cursor.execute("BEGIN IMMEDIATE")
+                current = self._read_feature_flags_with_cursor(cursor)
+                if current.revision != expected_revision:
+                    raise FeatureRevisionConflict(expected_revision, current.revision)
+
+                changed = [
+                    key for key, value in validated.items()
+                    if current.configured[key] != value
+                ]
+                for key in changed:
+                    cursor.execute(
+                        """
+                        UPDATE system_settings
+                        SET value = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE key = ?
+                        """,
+                        ("true" if validated[key] else "false", key),
+                    )
+                if changed:
+                    cursor.execute(
+                        """
+                        UPDATE system_settings
+                        SET value = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE key = 'feature_flags_revision'
+                        """,
+                        (str(current.revision + 1),),
+                    )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+            return self._read_feature_flags_with_cursor(self.conn.cursor())
+
     def get_system_setting(self, key: str) -> Optional[str]:
         """获取系统设置"""
         with self.lock:

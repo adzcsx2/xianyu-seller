@@ -44,6 +44,14 @@ export const getApiErrorMessage = (error: unknown, fallback: string): string => 
     message?: unknown;
   };
   const detail = candidate?.response?.data?.detail;
+  if (
+    detail
+    && typeof detail === 'object'
+    && !Array.isArray(detail)
+    && (detail as { code?: unknown }).code === 'feature_disabled'
+  ) {
+    return '功能已关闭，请到系统设置 > 功能区开启';
+  }
   if (typeof detail === 'string' && detail.trim()) return detail.trim();
   if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
     const message = (detail as { message?: unknown }).message;

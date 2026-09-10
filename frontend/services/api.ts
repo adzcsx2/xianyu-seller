@@ -13,7 +13,7 @@ import {
   AnnouncementPayload, ProductKnowledgeDocument, ProductKnowledgeEntry,
   KnowledgePreviewResult, KnowledgeBaseSummary, KnowledgeBaseDetail, KnowledgeFact,
   KnowledgeSource, KnowledgeRule, KnowledgeQAEntry, KnowledgeBinding, AIReplyStyle,
-  KnowledgeBaseAnswer,
+  KnowledgeBaseAnswer, FeatureFlagPatch, FeatureFlagSnapshot, FeatureFlagsUpdateResponse,
 } from '../types';
 
 // Auth
@@ -914,17 +914,48 @@ export const deleteReplyRule = async (id: string, cookieId: string): Promise<any
 }
 
 // Settings
+export const getFeatureFlags = async (): Promise<FeatureFlagSnapshot> => {
+  return get('/feature-flags');
+};
+
+export const updateFeatureFlags = async (
+  expectedRevision: number,
+  flags: FeatureFlagPatch,
+): Promise<FeatureFlagsUpdateResponse> => {
+  return put('/feature-flags', {
+    expected_revision: expectedRevision,
+    flags,
+  });
+};
+
 export const getSystemSettings = async (): Promise<SystemSettings> => {
-    const res = await get<{data: SystemSettings}>('/system-settings');
-    return res.data || res; // handle {success:true, data: {...}} wrapper if exists
+    const res = await get<SystemSettings | { data?: SystemSettings }>('/system-settings');
+    if (res && typeof res === 'object' && 'data' in res && res.data) {
+      return res.data;
+    }
+    return res as SystemSettings;
+};
+
+export interface AvailableAIModelsResponse {
+  models: string[];
+  current_model?: string;
+  source?: 'env' | 'system' | string;
+}
+
+export const getAvailableAIModels = async (cookieId?: string): Promise<AvailableAIModelsResponse> => {
+  return get('/ai-models', cookieId ? { cookie_id: cookieId } : undefined);
 };
 
 export const updateSystemSettings = async (settings: Partial<SystemSettings>): Promise<ApiResponse> => {
     // API expects individual PUTs, but we'll loop in the service for convenience or assume bulk endpoint if updated
     // Based on docs 12.2, we iterate.
-    const promises = Object.entries(settings).map(([key, value]) => {
+    const promises = Object.entries(settings)
+      .filter(([key]) => (
+        key !== 'ai_env_overrides'
+      ))
+      .map(([key, value]) => {
          return put(`/system-settings/${key}`, { value: String(value) });
-    });
+      });
     await Promise.all(promises);
     return { success: true, message: 'Settings saved' };
 };
@@ -936,9 +967,9 @@ export const getAccountAISettings = async (cookieId: string): Promise<AIReplySet
 export const updateAccountAISettings = async (cookieId: string, settings: Partial<AIReplySettings>): Promise<ApiResponse> => {
   const payload = {
     ai_enabled: settings.ai_enabled ?? false,
-    model_name: settings.model_name ?? 'qwen-plus',
+    model_name: settings.model_name ?? '',
     api_key: settings.api_key ?? '',
-    base_url: settings.base_url ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    base_url: settings.base_url ?? '',
     user_agent: settings.user_agent ?? '',
     context_enabled: settings.context_enabled ?? true,
     context_message_limit: settings.context_message_limit ?? 12,

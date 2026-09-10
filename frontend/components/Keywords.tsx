@@ -4,6 +4,7 @@ import {AccountDetail, ShippingRule, DefaultReply} from '../types';
 import { getAccountDetails, getReplyRules, updateReplyRule, deleteReplyRule, getShippingRules, updateShippingRule, deleteShippingRule, getCards, getDefaultReplies, getDefaultReply, updateDefaultReply, deleteDefaultReply, clearDefaultReplyRecords } from '../services/api';
 import { Plus, Trash2, MessageSquare, X, Save, Key, Truck, Power, PowerOff, Edit2, RefreshCw, Sparkles, Bot } from 'lucide-react';
 import { confirmAction, notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { EmptyState, PageHeader, PageLoading, PageTabs, SectionHeader } from './ui';
 
 type ReplyTabType = 'reply' | 'default';
@@ -38,6 +39,9 @@ interface DefaultReplyForm {
 }
 
 const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
+  const { isEnabled } = useFeatureFlags();
+  const autoReplyEnabled = isEnabled('feature_auto_reply_enabled');
+  const autoDeliveryEnabled = isEnabled('auto_delivery_enabled');
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [activeTab, setActiveTab] = useState<ReplyTabType>('reply');
@@ -143,6 +147,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleAdd = () => {
+    if ((mode === 'delivery' && !autoDeliveryEnabled) || (mode === 'reply' && !autoReplyEnabled)) return;
     if (mode === 'delivery') {
       setEditingDeliveryRule(null);
       setDeliveryForm({ keyword: '', cookie_id: '', card_id: '', description: '', enabled: true });
@@ -209,6 +214,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleSave = async () => {
+    if (!autoReplyEnabled) return;
     if (!selectedAccount) {
       notify('请先选择账号');
       return;
@@ -238,6 +244,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleSaveDelivery = async () => {
+    if (!autoDeliveryEnabled) return;
     if (!deliveryForm.keyword.trim()) {
       notify('请填写触发关键词');
       return;
@@ -267,6 +274,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleDelete = async (id: string) => {
+    if (!autoReplyEnabled) return;
     if (!selectedAccount || !await confirmAction('确认删除该关键词吗？')) return;
     try {
       await deleteReplyRule(id, selectedAccount);
@@ -278,6 +286,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleDeleteDelivery = async (id: string) => {
+    if (!autoDeliveryEnabled) return;
     if (!await confirmAction('确认删除该发货规则吗？')) return;
     try {
       await deleteShippingRule(id);
@@ -289,6 +298,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleToggleDelivery = async (rule: ShippingRule) => {
+    if (!autoDeliveryEnabled) return;
     try {
       await updateShippingRule({
         id: rule.id,
@@ -307,6 +317,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleSaveDefault = async () => {
+    if (!autoReplyEnabled) return;
     if (!defaultForm.cookie_id) {
       notify('请先选择账号');
       return;
@@ -328,6 +339,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleDeleteDefault = async (cookieId: string) => {
+    if (!autoReplyEnabled) return;
     if (!await confirmAction('确认删除该默认回复吗？')) return;
     try {
       await deleteDefaultReply(cookieId);
@@ -339,6 +351,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
   };
 
   const handleClearRecords = async (cookieId: string) => {
+    if (!autoReplyEnabled) return;
     if (!await confirmAction('确认清空该账号的回复记录吗？清空后可以重新对所有对话使用默认回复。')) return;
     try {
       await clearDefaultReplyRecords(cookieId);
@@ -426,14 +439,14 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
           )}
         </div>
         <div className="toolbar__group">
-          <button
+          {((mode === 'delivery' && autoDeliveryEnabled) || (mode === 'reply' && autoReplyEnabled)) && <button
             type="button"
             onClick={refreshCurrent}
             className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
           >
             <RefreshCw className="h-4 w-4" />
             刷新
-          </button>
+          </button>}
           <button
             type="button"
             onClick={handleAdd}

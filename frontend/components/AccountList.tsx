@@ -24,6 +24,7 @@ import {
   requestFreshCaptchaUrl,
 } from '../services/api';
 import { confirmAction, notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import {Power, Edit2, Trash2, QrCode, X, Check, Loader2, MessageSquare, RefreshCw, Save, User, Clock, Key, Eye, EyeOff, Bot, Settings, MapPin, Users, ShieldCheck, LogIn} from 'lucide-react';
 import { EmptyState, PageHeader, PageLoading } from './ui';
 
@@ -34,6 +35,8 @@ type ModalType = 'edit' | 'ai-settings' | null;
 const CAPTCHA_WS_RETRY_LIMIT = 120;
 
 const AccountList: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const profileAutoSyncEnabled = isEnabled('account_profile_auto_sync_enabled');
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [loading, setLoading] = useState(true);
   // 风控熔断状态：命中后账号会暂停请求，需要让用户看到而不是只报 409
@@ -91,9 +94,9 @@ const AccountList: React.FC = () => {
   // AI连接与上下文设置；商品业务规则统一在知识库维护。
   const [aiSettings, setAiSettings] = useState<AIReplySettings>({
     ai_enabled: false,
-    model_name: 'qwen-plus',
+    model_name: '',
     api_key: '',
-    base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    base_url: '',
     user_agent: '',
     context_enabled: true,
     context_message_limit: 12,
@@ -190,6 +193,7 @@ const AccountList: React.FC = () => {
   };
 
   const handleRefreshProfile = async (id: string) => {
+    if (!profileAutoSyncEnabled) return;
     setRefreshingProfileId(id);
     try {
       await refreshAccountProfile(id);
@@ -371,9 +375,9 @@ const AccountList: React.FC = () => {
       // context_* 等）会被后端默认值静默重置
       setAiSettings({
         ai_enabled: settings.ai_enabled ?? false,
-        model_name: settings.model_name || 'qwen-plus',
+        model_name: settings.model_name || '',
         api_key: settings.api_key || '',
-        base_url: settings.base_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        base_url: settings.base_url || '',
         user_agent: settings.user_agent ?? '',
         context_enabled: settings.context_enabled ?? true,
         context_message_limit: settings.context_message_limit ?? 12,
@@ -870,7 +874,7 @@ const AccountList: React.FC = () => {
                 </button>
                 <button
                     onClick={() => handleRefreshProfile(account.id)}
-                    disabled={refreshingProfileId === account.id}
+                    disabled={refreshingProfileId === account.id || !profileAutoSyncEnabled}
                     className="rounded-md p-2.5 text-amber-700 hover:bg-amber-50 disabled:cursor-wait disabled:opacity-50"
                     title="刷新闲鱼资料"
                     aria-label="刷新闲鱼资料"

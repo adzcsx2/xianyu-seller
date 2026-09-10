@@ -30,6 +30,11 @@ from app.db_manager import (
     MigrationPrecondition,
     CardInventoryConflict,
 )
+from app.feature_flags import (
+    FEATURE_FLAG_REGISTRY,
+    FeatureRevisionConflict,
+    InvalidFeatureFlag,
+)
 from app.product_knowledge import (
     COMMERCIAL_SENSITIVE_REPLY,
     SAFETY_REPLY,
@@ -39,6 +44,8 @@ from app.product_knowledge import (
 from app.product_automation import ProductAutomationService
 from app.file_log_collector import setup_file_logging, get_file_log_collector
 from app.ai_reply_engine import ai_reply_engine
+from app.ai_config import apply_env_ai_settings
+from app.ai_models import fetch_available_models
 from app.knowledge_runtime import KnowledgeRuntimeService
 from app.routers.delivery_block import create_delivery_block_router
 from utils.qr_login import qr_login_manager
@@ -1758,6 +1765,7 @@ async def send_message_api(request: SendMessageRequest):
 
 @app.post("/xianyu/reply", response_model=ResponseModel)
 async def xianyu_reply(req: RequestModel):
+    _require_feature_enabled("feature_auto_reply_enabled")
     msg_template = match_reply(req.cookie_id, req.send_message)
     is_default_reply = False
 
@@ -1961,6 +1969,15 @@ def validate_notification_channel(
 class SystemSettingIn(BaseModel):
     value: str
     description: Optional[str] = None
+
+
+class FeatureFlagsUpdateRequest(BaseModel):
+    # 额外字段在 handler 中统一映射为稳定的 invalid_feature_flag 错误，避免
+    # FastAPI 默认 validation detail 泄露内部字段结构。
+    model_config = ConfigDict(extra="allow")
+
+    expected_revision: StrictInt
+    flags: Dict[str, Any]
 
 
 class SystemSettingCreateIn(BaseModel):
@@ -3517,6 +3534,7 @@ def get_default_reply(cid: str, current_user: Dict[str, Any] = Depends(get_curre
 @app.put('/default-replies/{cid}')
 def update_default_reply(cid: str, reply_data: DefaultReplyIn, current_user: Dict[str, Any] = Depends(get_current_user)):
     """更新指定账号的默认回复设置"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     from app.db_manager import db_manager
     try:
         # 检查cookie是否属于当前用户
@@ -3554,6 +3572,7 @@ def get_all_default_replies(current_user: Dict[str, Any] = Depends(get_current_u
 @app.delete('/default-replies/{cid}')
 def delete_default_reply(cid: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     """删除指定账号的默认回复设置"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     from app.db_manager import db_manager
     try:
         # 检查cookie是否属于当前用户
@@ -3577,6 +3596,7 @@ def delete_default_reply(cid: str, current_user: Dict[str, Any] = Depends(get_cu
 @app.post('/default-replies/{cid}/clear-records')
 def clear_default_reply_records(cid: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     """清空指定账号的默认回复记录"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     from app.db_manager import db_manager
     try:
         # 检查cookie是否属于当前用户
@@ -4018,6 +4038,130 @@ def list_auto_reply_logs(
 
 # ------------------------- 系统设置接口 -------------------------
 
+def _feature_flags_payload(snapshot, changed_keys=None, runtime_apply=None):
+    payload = {
+        "revision": snapshot.revision,
+        "configured": snapshot.configured,
+        "effective": snapshot.effective,
+        "definitions": [
+            {
+                "key": definition.key,
+                "group": definition.group,
+                "label": definition.label,
+                "description": definition.description,
+                "depends_on": list(definition.depends_on),
+                "ui_targets": list(definition.ui_targets),
+                "risk_level": definition.risk_level,
+            }
+            for definition in snapshot.definitions
+        ],
+        "warnings": list(snapshot.warnings),
+    }
+    if changed_keys is not None:
+        payload["changed_keys"] = list(changed_keys)
+    if runtime_apply is not None:
+        payload["runtime_apply"] = runtime_apply
+    return payload
+
+
+def _require_feature_enabled(feature_key: str) -> None:
+    """Reject direct API calls when the corresponding capability is disabled."""
+    try:
+        snapshot = db_manager.get_feature_flags()
+        enabled = bool(snapshot.effective.get(feature_key, False))
+    except Exception as exc:
+        logger.warning("读取功能开关失败，按关闭处理: {}", type(exc).__name__)
+        enabled = False
+    if enabled:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "feature_disabled",
+            "feature": feature_key,
+            "message": "功能已关闭，请到系统设置 > 功能区开启",
+        },
+    )
+
+
+def _apply_feature_flags_runtime(snapshot) -> str:
+    manager = getattr(cookie_manager, "manager", None)
+    apply_method = getattr(manager, "apply_feature_flags", None)
+    if manager is None or not callable(apply_method):
+        return "pending"
+    try:
+        result = apply_method(snapshot)
+        if isinstance(result, str) and result in {"applied", "pending", "failed"}:
+            return result
+        if isinstance(result, dict):
+            status = result.get("runtime_apply") or result.get("status")
+            if status in {"applied", "pending", "failed"}:
+                instance_statuses = result.get("instances")
+                if isinstance(instance_statuses, dict):
+                    logger.info(
+                        "功能开关运行时收敛: status={} instances={}",
+                        status,
+                        {
+                            "applied": sum(value == "applied" for value in instance_statuses.values()),
+                            "failed": sum(value == "failed" for value in instance_statuses.values()),
+                        },
+                    )
+                return status
+        return "applied"
+    except Exception as exc:
+        logger.warning(
+            "功能开关运行时收敛失败，配置已持久化: {}", type(exc).__name__
+        )
+        return "failed"
+
+
+@app.get("/feature-flags")
+def get_feature_flags(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """读取非敏感的功能可见性合同，所有已认证用户可用。"""
+    del current_user
+    return _feature_flags_payload(db_manager.get_feature_flags())
+
+
+@app.put("/feature-flags")
+def update_feature_flags(
+    request: FeatureFlagsUpdateRequest,
+    _: Dict[str, Any] = Depends(require_admin),
+):
+    """管理员以 revision 保护的 partial patch 原子更新功能开关。"""
+    try:
+        if request.model_extra:
+            raise InvalidFeatureFlag(message="feature patch contains unknown fields")
+        before = db_manager.get_feature_flags()
+        snapshot = db_manager.update_feature_flags_atomic(
+            dict(request.flags), request.expected_revision
+        )
+        changed_keys = [
+            key for key, value in request.flags.items()
+            if before.configured.get(key) != value
+        ]
+        runtime_apply = _apply_feature_flags_runtime(snapshot)
+        return _feature_flags_payload(snapshot, changed_keys, runtime_apply)
+    except FeatureRevisionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "feature_revision_conflict",
+                "expected_revision": exc.expected,
+                "current_revision": exc.current,
+            },
+        ) from exc
+    except InvalidFeatureFlag as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_feature_flag", "feature": exc.key, "message": str(exc)},
+        ) from exc
+    except Exception as exc:
+        logger.error("功能开关原子更新失败: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "feature_flags_update_failed", "message": "功能开关保存失败"},
+        ) from exc
+
 @app.get('/system-settings/public')
 def get_public_system_settings():
     """获取公开的系统设置（无需认证）"""
@@ -4054,7 +4198,7 @@ def get_system_settings(_: Dict[str, Any] = Depends(require_admin)):
     """获取系统设置（排除敏感信息）"""
     from app.db_manager import db_manager
     try:
-        settings = db_manager.get_all_system_settings()
+        settings = apply_env_ai_settings(db_manager.get_all_system_settings())
         # 移除敏感信息
         if 'admin_password_hash' in settings:
             del settings['admin_password_hash']
@@ -4063,12 +4207,59 @@ def get_system_settings(_: Dict[str, Any] = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get('/ai-models')
+def get_ai_models(
+    cookie_id: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """从当前生效的 OpenAI 兼容服务获取可用模型列表。"""
+    from app.db_manager import db_manager
+
+    try:
+        if cookie_id:
+            if cookie_id not in db_manager.get_all_cookies(current_user['user_id']):
+                raise HTTPException(status_code=403, detail='无权限访问该账号')
+            account_settings = db_manager.get_ai_reply_settings(cookie_id)
+            settings = {
+                'ai_api_url': account_settings.get('base_url', ''),
+                'ai_api_key': account_settings.get('api_key', ''),
+                'ai_model': account_settings.get('model_name', ''),
+                'ai_env_overrides': {},
+            }
+        else:
+            settings = apply_env_ai_settings(db_manager.get_all_system_settings())
+        models = fetch_available_models(
+            settings.get('ai_api_url', ''),
+            settings.get('ai_api_key', ''),
+        )
+        return {
+            'models': models,
+            'current_model': settings.get('ai_model', ''),
+            'source': 'env' if settings.get('ai_env_overrides') else 'system',
+        }
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        # 不把上游 URL、认证信息或供应商错误原文返回给浏览器。
+        raise HTTPException(
+            status_code=502,
+            detail='获取模型列表失败，请检查模型服务地址和 API Key',
+        ) from None
+
+
 @app.put('/system-settings/{key}')
 def update_system_setting(key: str, setting_data: SystemSettingIn,
                           _: Dict[str, Any] = Depends(require_admin)):
     """更新系统设置"""
     from app.db_manager import db_manager
     try:
+        if key in FEATURE_FLAG_REGISTRY.keys():
+            raise HTTPException(
+                status_code=400,
+                detail="功能开关必须通过 /feature-flags 批量接口更新",
+            )
         # 禁止直接修改密码哈希
         if key == 'admin_password_hash':
             raise HTTPException(status_code=400, detail='请使用密码修改接口')
@@ -4478,6 +4669,7 @@ def get_keywords_with_item_id(cid: str, current_user: Dict[str, Any] = Depends(g
 
 @app.post("/keywords/{cid}")
 def update_keywords(cid: str, body: KeywordIn, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_auto_reply_enabled")
     if cookie_manager.manager is None:
         raise HTTPException(status_code=500, detail="CookieManager 未就绪")
 
@@ -4501,6 +4693,7 @@ def update_keywords(cid: str, body: KeywordIn, current_user: Dict[str, Any] = De
 @app.post("/keywords-with-item-id/{cid}")
 def update_keywords_with_item_id(cid: str, body: KeywordWithItemIdIn, current_user: Dict[str, Any] = Depends(get_current_user)):
     """更新包含商品ID的关键词列表"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     if cookie_manager.manager is None:
         raise HTTPException(status_code=500, detail="CookieManager 未就绪")
 
@@ -4714,6 +4907,7 @@ def export_keywords(cid: str, current_user: Dict[str, Any] = Depends(get_current
 @app.post("/keywords-import/{cid}")
 async def import_keywords(cid: str, file: UploadFile = File(...), current_user: Dict[str, Any] = Depends(get_current_user)):
     """导入Excel文件中的关键词到指定账号"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     if cookie_manager.manager is None:
         raise HTTPException(status_code=500, detail="CookieManager 未就绪")
 
@@ -4820,6 +5014,7 @@ async def add_image_keyword(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """添加图片关键词"""
+    _require_feature_enabled("feature_auto_reply_enabled")
     logger.info(f"接收到图片关键词添加请求: cid={cid}, keyword={keyword}, item_id={item_id}")
 
     if cookie_manager.manager is None:
@@ -5031,6 +5226,7 @@ def get_cards(current_user: Dict[str, Any] = Depends(get_current_user)):
 @app.post("/cards")
 def create_card(card_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
     """创建新卡券"""
+    _require_feature_enabled("feature_cards_enabled")
     try:
         from app.db_manager import db_manager
         user_id = current_user['user_id']
@@ -5089,6 +5285,7 @@ def get_card(card_id: int, current_user: Dict[str, Any] = Depends(get_current_us
 @app.put("/cards/{card_id}")
 def update_card(card_id: int, card_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
     """更新卡券"""
+    _require_feature_enabled("feature_cards_enabled")
     try:
         from app.db_manager import db_manager
         # 验证多规格字段
@@ -5141,6 +5338,7 @@ async def update_card_with_image(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """更新带图片的卡券"""
+    _require_feature_enabled("feature_cards_enabled")
     try:
         logger.info(f"接收到带图片的卡券更新请求: card_id={card_id}, name={name}, type={type}")
 
@@ -5244,6 +5442,7 @@ def get_delivery_rules(current_user: Dict[str, Any] = Depends(get_current_user))
 @app.post("/delivery-rules")
 def create_delivery_rule(rule_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
     """创建新发货规则"""
+    _require_feature_enabled("auto_delivery_enabled")
     try:
         from app.db_manager import db_manager
         user_id = current_user['user_id']
@@ -5301,6 +5500,7 @@ def get_delivery_rule(rule_id: int, current_user: Dict[str, Any] = Depends(get_c
 @app.put("/delivery-rules/{rule_id}")
 def update_delivery_rule(rule_id: int, rule_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
     """更新发货规则"""
+    _require_feature_enabled("auto_delivery_enabled")
     try:
         from app.db_manager import db_manager
         user_id = current_user['user_id']
@@ -5332,6 +5532,7 @@ def update_delivery_rule(rule_id: int, rule_data: dict, current_user: Dict[str, 
 @app.delete("/cards/{card_id}")
 def delete_card(card_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
     """删除卡券"""
+    _require_feature_enabled("feature_cards_enabled")
     try:
         from app.db_manager import db_manager
         references = db_manager.get_card_variant_references(
@@ -5362,6 +5563,7 @@ def delete_card(card_id: int, current_user: Dict[str, Any] = Depends(get_current
 @app.delete("/delivery-rules/{rule_id}")
 def delete_delivery_rule(rule_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
     """删除发货规则"""
+    _require_feature_enabled("auto_delivery_enabled")
     try:
         from app.db_manager import db_manager
         user_id = current_user['user_id']
@@ -5409,6 +5611,7 @@ def update_product_material(
     payload: Dict[str, Any],
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5425,6 +5628,7 @@ def delete_product_material(
     material_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         if not product_automation.delete_material(current_user["user_id"], material_id):
             raise LookupError("素材不存在")
@@ -5448,6 +5652,7 @@ def create_product_filter_rule(
     payload: Dict[str, Any],
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5465,6 +5670,7 @@ def update_product_filter_rule(
     payload: Dict[str, Any],
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5481,6 +5687,7 @@ def delete_product_filter_rule(
     rule_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         if not product_automation.delete_filter_rule(current_user["user_id"], rule_id):
             raise LookupError("筛选规则不存在")
@@ -5494,6 +5701,7 @@ def run_product_filter_rule(
     rule_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5520,6 +5728,7 @@ def create_product_delete_rule(
     payload: Dict[str, Any],
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5537,6 +5746,7 @@ def update_product_delete_rule(
     payload: Dict[str, Any],
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5553,6 +5763,7 @@ def delete_product_delete_rule(
     rule_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         if not product_automation.delete_delete_rule(current_user["user_id"], rule_id):
             raise LookupError("删除计划不存在")
@@ -5566,6 +5777,7 @@ def preview_product_delete_rule(
     rule_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     try:
         return {
             "success": True,
@@ -5592,6 +5804,7 @@ def get_product_automation_runs(
 def repair_product_published_ids(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     return {
         "success": True,
         "data": product_automation.repair_published_ids(current_user["user_id"]),
@@ -5602,6 +5815,7 @@ def repair_product_published_ids(
 def repair_product_short_links(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     return {
         "success": True,
         "data": product_automation.repair_short_links(current_user["user_id"]),
@@ -5612,6 +5826,7 @@ def repair_product_short_links(
 def compensate_product_cards(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_product_automation_enabled")
     return {
         "success": True,
         "data": product_automation.compensate_cards(current_user["user_id"]),
@@ -5741,6 +5956,7 @@ def create_manual_item(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """手动添加未从闲鱼同步到本地的商品。"""
+    _require_feature_enabled("feature_items_enabled")
     try:
         from app.db_manager import db_manager
 
@@ -5856,6 +6072,7 @@ def save_item_delivery_config(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """整体保存商品规格与逐规格发货库存绑定。"""
+    _require_feature_enabled("auto_delivery_enabled")
     user_id = current_user["user_id"]
     if cookie_id not in db_manager.get_all_cookies(user_id):
         raise HTTPException(status_code=403, detail="无权操作该闲鱼账号")
@@ -5910,6 +6127,7 @@ async def search_items(
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
 ):
     """搜索闲鱼商品"""
+    _require_feature_enabled("item_sync_enabled")
     user_info = f"【{current_user.get('username', 'unknown')}#{current_user.get('user_id', 'unknown')}】" if current_user else "【未登录】"
 
     try:
@@ -6008,6 +6226,7 @@ async def search_multiple_pages(
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
 ):
     """搜索多页闲鱼商品"""
+    _require_feature_enabled("item_sync_enabled")
     user_info = f"【{current_user.get('username', 'unknown')}#{current_user.get('user_id', 'unknown')}】" if current_user else "【未登录】"
 
     try:
@@ -6109,6 +6328,7 @@ def list_knowledge_bases(current_user: Dict[str, Any] = Depends(get_current_user
 
 @app.post("/knowledge-bases")
 def create_knowledge_base(request: KnowledgeBaseCreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     try:
         return db_manager.create_knowledge_base(request.name, request.description)
     except Exception as exc:
@@ -6125,6 +6345,7 @@ def get_knowledge_base(base_id: str, current_user: Dict[str, Any] = Depends(get_
 
 @app.put("/knowledge-bases/{base_id}")
 def update_knowledge_base(base_id: str, request: KnowledgeBaseUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     try:
         values = request.model_dump(exclude_unset=True); values.pop("expected_version", None)
         return db_manager.update_knowledge_base(base_id, values, expected_version=request.expected_version)
@@ -6134,6 +6355,7 @@ def update_knowledge_base(base_id: str, request: KnowledgeBaseUpdateRequest, cur
 
 @app.delete("/knowledge-bases/{base_id}")
 def delete_knowledge_base(base_id: str, expected_version: int = Query(..., ge=1), current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     try:
         return db_manager.delete_knowledge_base(base_id, expected_version=expected_version)
     except Exception as exc:
@@ -6162,16 +6384,19 @@ def _delete_content(kind: str, base_id: str, content_id: str, expected_version: 
 def _register_content_routes(kind: str, path_name: str):
     @app.post(f"/knowledge-bases/{{base_id}}/{path_name}")
     def create_content(base_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+        _require_feature_enabled("feature_knowledge_base_enabled")
         try: return _create_content(kind, base_id, request)
         except Exception as exc: raise _knowledge_http_error(exc) from exc
 
     @app.put(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
     def update_content(base_id: str, content_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+        _require_feature_enabled("feature_knowledge_base_enabled")
         try: return _update_content(kind, base_id, content_id, request)
         except Exception as exc: raise _knowledge_http_error(exc) from exc
 
     @app.delete(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
     def delete_content(base_id: str, content_id: str, expected_version: int = Query(..., ge=1), current_user: Dict[str, Any] = Depends(get_current_user)):
+        _require_feature_enabled("feature_knowledge_base_enabled")
         try: return _delete_content(kind, base_id, content_id, expected_version)
         except Exception as exc: raise _knowledge_http_error(exc) from exc
 
@@ -6191,6 +6416,8 @@ async def ask_knowledge_base(
     request: KnowledgeBaseAskRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    _require_feature_enabled("feature_ai_reply_enabled")
     user_cookies = db_manager.get_all_cookies(current_user["user_id"])
     if request.cookie_id not in user_cookies:
         raise HTTPException(status_code=403, detail="无权限使用该账号的 AI 配置")
@@ -6230,6 +6457,7 @@ def list_item_knowledge_bindings(cookie_id: str, item_id: str, current_user: Dic
 
 @app.post("/items/{cookie_id}/{item_id}/knowledge-bindings")
 def add_item_knowledge_binding(cookie_id: str, item_id: str, request: KnowledgeBindingRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     _require_product_knowledge_scope(cookie_id, item_id, current_user)
     try: return db_manager.add_item_knowledge_binding(cookie_id, item_id, request.knowledge_base_id)
     except Exception as exc: raise _knowledge_http_error(exc) from exc
@@ -6237,6 +6465,7 @@ def add_item_knowledge_binding(cookie_id: str, item_id: str, request: KnowledgeB
 
 @app.delete("/items/{cookie_id}/{item_id}/knowledge-bindings/{base_id}")
 def remove_item_knowledge_binding(cookie_id: str, item_id: str, base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     _require_product_knowledge_scope(cookie_id, item_id, current_user)
     if not db_manager.delete_item_knowledge_binding(cookie_id, item_id, base_id):
         raise HTTPException(status_code=404, detail="商品未绑定该知识库")
@@ -6245,6 +6474,7 @@ def remove_item_knowledge_binding(cookie_id: str, item_id: str, base_id: str, cu
 
 @app.post("/items/{cookie_id}/{item_id}/knowledge-preview")
 def preview_knowledge_binding(cookie_id: str, item_id: str, request: ProductKnowledgePreviewRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
     _require_product_knowledge_scope(cookie_id, item_id, current_user)
     result = KnowledgeRuntimeService(db_manager).match(cookie_id, item_id, request.message)
     matches = []
@@ -6263,6 +6493,7 @@ def get_ai_reply_style(current_user: Dict[str, Any] = Depends(get_current_user))
 
 @app.put("/ai-reply-style")
 def update_ai_reply_style(request: AIReplyStyleRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_ai_reply_enabled")
     lowered = request.reply_style.lower()
     if any(term in lowered for term in GLOBAL_REPLY_STYLE_FORBIDDEN_TERMS) or request.reply_style.lstrip().startswith(("{", "[")):
         raise HTTPException(status_code=422, detail="回复风格只能描述语气、篇幅和表达习惯")
@@ -6422,6 +6653,7 @@ def update_item_detail(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """更新商品详情"""
+    _require_feature_enabled("feature_items_enabled")
     try:
         # 检查cookie是否属于当前用户
         user_id = current_user['user_id']
@@ -6449,6 +6681,7 @@ def delete_item_info(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """删除商品信息"""
+    _require_feature_enabled("feature_items_enabled")
     try:
         # 检查cookie是否属于当前用户
         user_id = current_user['user_id']
@@ -6477,9 +6710,9 @@ class BatchDeleteRequest(BaseModel):
 class AIReplySettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ai_enabled: bool
-    model_name: str = "qwen-plus"
+    model_name: str = ""
     api_key: str = ""
-    base_url: str = "https://ai.corleom.com/v1"
+    base_url: str = ""
     user_agent: str = ""
     context_enabled: bool = True
     context_message_limit: int = 12
@@ -6487,14 +6720,29 @@ class AIReplySettings(BaseModel):
 
 
 def _public_ai_reply_settings(settings: dict) -> dict:
-    """返回前端可展示的AI配置，不暴露密钥。"""
+    """返回前端可展示的 AI 配置。"""
+    from app.ai_config import get_env_ai_config
+
     public_settings = dict(settings)
     # 折扣/议价和 custom_prompts 已迁入商品绑定知识库；保留数据库列仅为
     # 兼容旧回滚，不再通过账号 API 暴露或写回，避免覆盖全局风格。
     for legacy in ("max_discount_percent", "max_discount_amount", "max_bargain_rounds", "custom_prompts"):
         public_settings.pop(legacy, None)
-    public_settings['api_key_configured'] = bool(public_settings.get('api_key'))
-    public_settings['api_key'] = ''
+    env_config = get_env_ai_config()
+    account_api_key_configured = bool(public_settings.get('api_key'))
+    using_env_api_key = bool(
+        env_config['api_key'] and public_settings.get('api_key') == env_config['api_key']
+    )
+    public_settings['ai_env_overrides'] = {
+        'api_key': bool(env_config['api_key'] and public_settings.get('api_key') == env_config['api_key']),
+        'base_url': bool(env_config['base_url'] and public_settings.get('base_url') == env_config['base_url']),
+        'model_name': bool(env_config['model_name'] and public_settings.get('model_name') == env_config['model_name']),
+    }
+    public_settings['api_key_configured'] = account_api_key_configured
+    public_settings['api_key_source'] = 'env' if using_env_api_key else 'account'
+    # 账号级密钥继续只返回“已配置”状态，不把账号密钥原文回传到前端。
+    if not using_env_api_key:
+        public_settings['api_key'] = ''
     return public_settings
 
 
@@ -6504,6 +6752,7 @@ def batch_delete_items(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """批量删除商品信息"""
+    _require_feature_enabled("feature_items_enabled")
     try:
         if not request.items:
             raise HTTPException(status_code=400, detail="删除列表不能为空")
@@ -6555,6 +6804,7 @@ def get_ai_reply_settings(cookie_id: str, current_user: Dict[str, Any] = Depends
 @app.put("/ai-reply-settings/{cookie_id}")
 def update_ai_reply_settings(cookie_id: str, settings: AIReplySettings, current_user: Dict[str, Any] = Depends(get_current_user)):
     """更新指定账号的AI回复设置"""
+    _require_feature_enabled("feature_ai_reply_enabled")
     try:
         # 检查cookie是否属于当前用户
         user_id = current_user['user_id']
@@ -6576,7 +6826,12 @@ def update_ai_reply_settings(cookie_id: str, settings: AIReplySettings, current_
         settings_dict['context_expire_minutes'] = max(
             5, min(1440, settings.context_expire_minutes)
         )
-        if not settings_dict.get('api_key'):
+        from app.ai_config import get_env_ai_config
+        env_api_key = get_env_ai_config()['api_key']
+        # 页面原样保存 .env 默认值时不复制到账号表；只有用户输入不同值才形成账号覆盖。
+        if env_api_key and settings_dict.get('api_key') == env_api_key:
+            settings_dict['api_key'] = ''
+        elif not settings_dict.get('api_key'):
             settings_dict['api_key'] = db_manager.get_account_ai_api_key(cookie_id)
         success = db_manager.save_ai_reply_settings(cookie_id, settings_dict)
 
@@ -6621,6 +6876,7 @@ def get_all_ai_reply_settings(current_user: Dict[str, Any] = Depends(get_current
 async def test_ai_reply(cookie_id: str, test_data: AIReplyTestRequest,
                         current_user: Dict[str, Any] = Depends(get_current_user)):
     """使用当前账号拥有的真实商品测试 AI 回复。"""
+    _require_feature_enabled("feature_ai_reply_enabled")
     test_chat_id = f"__ai_test__{uuid.uuid4().hex}"
     try:
         # 检查账号是否存在
@@ -6823,6 +7079,7 @@ async def clear_logs(_: Dict[str, Any] = Depends(require_admin)):
 
 @app.post("/items/get-all-from-account")
 async def get_all_items_from_account(request: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("item_sync_enabled")
     """从指定账号获取所有商品信息"""
     try:
         cookie_id = request.get('cookie_id')
@@ -6921,6 +7178,7 @@ async def get_all_items_from_account(request: dict, current_user: Dict[str, Any]
 
 @app.post("/items/get-by-page")
 async def get_items_by_page(request: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("item_sync_enabled")
     """从指定账号按页获取商品信息"""
     try:
         # 验证参数
@@ -7546,6 +7804,7 @@ def update_item_reply(
     """
     更新指定账号和商品的回复内容
     """
+    _require_feature_enabled("feature_auto_reply_enabled")
     try:
         user_id = current_user['user_id']
         from app.db_manager import db_manager
@@ -7573,6 +7832,7 @@ def delete_item_reply(cookie_id: str, item_id: str, current_user: Dict[str, Any]
     """
     删除指定账号cookie_id和商品item_id的商品回复
     """
+    _require_feature_enabled("feature_auto_reply_enabled")
     try:
         user_id = current_user['user_id']
         user_cookies = db_manager.get_all_cookies(user_id)
@@ -7605,6 +7865,7 @@ async def batch_delete_item_reply(
     """
     批量删除商品回复
     """
+    _require_feature_enabled("feature_auto_reply_enabled")
     user_id = current_user['user_id']
     from app.db_manager import db_manager
 
@@ -7983,6 +8244,7 @@ def clear_table_data(table_name: str, admin_user: Dict[str, Any] = Depends(requi
 # 商品多规格管理API
 @app.put("/items/{cookie_id}/{item_id}/multi-spec")
 def update_item_multi_spec(cookie_id: str, item_id: str, spec_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_items_enabled")
     """更新商品的多规格状态"""
     try:
         from app.db_manager import db_manager
@@ -8007,6 +8269,7 @@ def update_item_multi_spec(cookie_id: str, item_id: str, spec_data: dict, curren
 # 商品多数量发货管理API
 @app.put("/items/{cookie_id}/{item_id}/multi-quantity-delivery")
 def update_item_multi_quantity_delivery(cookie_id: str, item_id: str, delivery_data: dict, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("auto_delivery_enabled")
     """更新商品的多数量发货状态"""
     try:
         from app.db_manager import db_manager
@@ -8149,6 +8412,7 @@ async def update_seller_features(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """按账号更新评价/求花开关。"""
+    _require_feature_enabled("feature_buyer_interaction_enabled")
     from app.db_manager import db_manager
 
     if cookie_id not in (db_manager.get_all_cookies(current_user['user_id']) or {}):
@@ -8201,6 +8465,7 @@ def get_order_detail(order_id: str, current_user: Dict[str, Any] = Depends(get_c
 @app.delete('/api/orders/{order_id}')
 def delete_order(order_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     """删除订单"""
+    _require_feature_enabled("feature_orders_enabled")
     try:
         from app.db_manager import db_manager
 
@@ -8239,6 +8504,7 @@ async def refresh_single_order(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """刷新单条订单状态"""
+    _require_feature_enabled("order_sync_enabled")
     try:
         from app.db_manager import db_manager
         from utils.order_fetcher_optimized import process_orders_batch
@@ -8352,6 +8618,7 @@ async def update_order(
     自动检查订单数据完整性，如数据不完整则通过 Playwright 从订单详情页获取最新完整数据
     获取完整信息包括：订单ID、商品ID、买家ID、规格、数量、金额、订单状态、收货人信息
     """
+    _require_feature_enabled("feature_orders_enabled")
     try:
         from app.db_manager import db_manager
         from utils.order_fetcher_optimized import fetch_order_complete
@@ -8504,6 +8771,7 @@ async def refresh_orders_status(
     2. 对非'已发货'状态的订单，使用Playwright查询最新状态
     3. 更新数据库中有变化的订单
     """
+    _require_feature_enabled("order_sync_enabled")
     try:
         from app.db_manager import db_manager
         from utils.order_fetcher_optimized import process_orders_batch
@@ -8704,6 +8972,7 @@ async def manual_ship_orders(
     - status_only: 仅在闲鱼标记为已发货（不发送卡券给买家）
     - full_delivery: 完整发货流程（匹配卡券、发送卡券给买家、标记发货状态）
     """
+    _require_feature_enabled("auto_delivery_enabled")
     try:
         from app.db_manager import db_manager
         from XianyuAutoAsync import XianyuLive
@@ -9093,6 +9362,7 @@ async def import_orders(
     导入订单
     支持批量导入自定义订单数据
     """
+    _require_feature_enabled("order_sync_enabled")
     try:
         from app.db_manager import db_manager
 
@@ -9306,6 +9576,7 @@ async def sync_sold_orders(
     ``days`` 仅为兼容旧调用保留。开启 ``include_refund_history`` 时会用退款列表
     补全订单列表已查不到的历史归档单。
     """
+    _require_feature_enabled("order_sync_enabled")
     from app.db_manager import db_manager
     from utils.seller_order_sync import sync_account_orders
 
@@ -9809,6 +10080,7 @@ async def polish_items(
     item_ids: Optional[str] = Form(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    _require_feature_enabled("auto_polish_enabled")
     """手动擦亮商品。
 
     擦亮会把商品重新推到搜索和推荐前列，是平台提供的免费曝光手段。
@@ -9925,6 +10197,7 @@ async def require_order_flower(
 
     会给买家发送一条消息，需先开启 auto_flower_enabled 开关。
     """
+    _require_feature_enabled("feature_buyer_interaction_enabled")
     from app.db_manager import db_manager
     from utils.xianyu_seller_api import XianyuSellerAPI, SellerApiError
 
@@ -9963,6 +10236,7 @@ async def rate_orders(
     评价提交后无法撤销，需先开启 auto_rate_enabled 开关。
     同一批订单必须属于同一个账号，因为接口按登录态区分卖家身份。
     """
+    _require_feature_enabled("feature_buyer_interaction_enabled")
     from app.db_manager import db_manager
     from utils.xianyu_seller_api import XianyuSellerAPI, SellerApiError
 

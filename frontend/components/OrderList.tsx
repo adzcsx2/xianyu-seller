@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Order, OrderStatus, Item, AccountDetail } from '../types';
 import { getOrders, syncOrders, syncSingleOrder, manualShipOrder, updateOrder, deleteOrder, importOrders, getItems, syncSoldOrders, getAccountDetails, requireOrderFlower, rateOrders, getSellerFeatureFlags } from '../services/api';
 import { confirmAction, notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { Search, Truck, RefreshCw, ChevronLeft, ChevronRight, PackageCheck, Edit, Eye, Plus, Save, X, ExternalLink, Trash2, ClipboardList, Flower2, Star } from 'lucide-react';
 import { EmptyState, PageHeader, PageTabs } from './ui';
 
@@ -33,6 +34,11 @@ const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
 };
 
 const OrderList: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const ordersEnabled = isEnabled('feature_orders_enabled');
+  const orderSyncEnabled = isEnabled('order_sync_enabled');
+  const autoDeliveryEnabled = isEnabled('auto_delivery_enabled');
+  const buyerInteractionEnabled = isEnabled('feature_buyer_interaction_enabled');
   const [orders, setOrders] = useState<Order[]>([]);
   const [allOrders, setAllOrders] = useState<Order[]>([]); // 保存所有订单用于搜索
   const [items, setItems] = useState<Item[]>([]);
@@ -210,6 +216,7 @@ const OrderList: React.FC = () => {
 
   // 向买家索要小红花：会真实发出一条消息，需二次确认
   const handleRequireFlower = async (order: Order) => {
+    if (!buyerInteractionEnabled) return;
     const ok = await confirmAction(
       `将向订单 ${order.order_id} 的买家发送一条求花消息，确定继续吗？`
     );
@@ -228,6 +235,7 @@ const OrderList: React.FC = () => {
 
   // 提交评价：不可撤销，走弹窗让用户确认内容
   const handleSubmitRate = async () => {
+    if (!buyerInteractionEnabled) return;
     if (!rateOrder) return;
     if (!rateFeedback.trim()) {
       notify('请填写评价内容', 'error');
@@ -273,6 +281,7 @@ const OrderList: React.FC = () => {
   }, [filter, page, pageSize, searchText, accountFilter]);
 
   const handleSync = async () => {
+      if (!orderSyncEnabled) return;
       setLoading(true);
       await syncOrders();
       loadOrders();
@@ -280,6 +289,7 @@ const OrderList: React.FC = () => {
 
   // 从卖家端接口拉取真实成交数据，可补齐监听离线期间产生的订单
   const handleSyncSold = async () => {
+      if (!orderSyncEnabled) return;
       setSyncSoldLoading(true);
       try {
           const res = await syncSoldOrders(undefined, 30);
@@ -294,6 +304,7 @@ const OrderList: React.FC = () => {
   };
 
   const handleShip = (id: string) => {
+      if (!autoDeliveryEnabled) return;
       setShipOrderId(id);
       setShipResult(null);
       setShowShipModal(true);
@@ -329,6 +340,7 @@ const OrderList: React.FC = () => {
   };
 
   const handleSaveEdit = async () => {
+    if (!ordersEnabled) return;
     if (!editingOrder || !editingOrder.order_id) return;
     try {
       // 映射前端字段到后端期望的字段名
@@ -370,6 +382,7 @@ const OrderList: React.FC = () => {
   };
 
   const handleImportOrders = async () => {
+    if (!ordersEnabled) return;
     try {
       const orders = JSON.parse(importText);
       await importOrders(Array.isArray(orders) ? orders : [orders]);
@@ -383,6 +396,7 @@ const OrderList: React.FC = () => {
   };
 
   const handleSyncSingle = async (orderId: string) => {
+    if (!orderSyncEnabled) return;
     setSyncingOrderId(orderId);
     try {
       const result = await syncSingleOrder(orderId);
@@ -400,6 +414,7 @@ const OrderList: React.FC = () => {
   };
 
   const handleDelete = async (orderId: string) => {
+    if (!ordersEnabled) return;
     if (!await confirmAction('确认删除该订单吗？删除后无法恢复。')) return;
     setDeletingOrderId(orderId);
     try {
@@ -471,25 +486,25 @@ const OrderList: React.FC = () => {
             >
                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button
+            {ordersEnabled && <button
               onClick={() => setShowImportModal(true)}
               className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
             >
               <Plus className="w-4 h-4" />
               插入订单
-            </button>
-            <button onClick={handleSync} className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm">
+            </button>}
+            {orderSyncEnabled && <button onClick={handleSync} className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm">
                 <Truck className="h-4 w-4" />
                 刷新状态
-            </button>
-            <button
+            </button>}
+            {orderSyncEnabled && <button
               onClick={handleSyncSold}
               disabled={syncSoldLoading}
               className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm disabled:opacity-60"
             >
                 <RefreshCw className={`h-4 w-4 ${syncSoldLoading ? 'animate-spin' : ''}`} />
                 拉取卖出订单
-            </button>
+            </button>}
           </>
         )}
       />
@@ -626,7 +641,7 @@ const OrderList: React.FC = () => {
                   </td>
                   <td data-label="操作" className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                    {order.status === 'pending_ship' && (
+                    {autoDeliveryEnabled && order.status === 'pending_ship' && (
                         <button
                             onClick={() => handleShip(order.order_id)}
                             className="ios-btn-primary mr-1 rounded-md px-3 py-2 text-xs"
@@ -645,7 +660,7 @@ const OrderList: React.FC = () => {
                     </a>
                     {/* 买家互动入口：仅在设置中开启、且订单已进入发货后阶段时出现，
                         避免对未成交订单误操作。两者都会对买家产生不可撤销的动作。 */}
-                    {sellerFeatures.auto_flower_enabled
+                    {buyerInteractionEnabled && sellerFeatures.auto_flower_enabled
                       && (order.status === 'shipped' || order.status === 'completed') && (
                       <button
                         onClick={() => handleRequireFlower(order)}
@@ -656,7 +671,7 @@ const OrderList: React.FC = () => {
                         <Flower2 className="w-4 h-4" />
                       </button>
                     )}
-                    {sellerFeatures.auto_rate_enabled
+                    {buyerInteractionEnabled && sellerFeatures.auto_rate_enabled
                       && (order.status === 'shipped' || order.status === 'completed') && (
                       <button
                         onClick={() => {
@@ -679,29 +694,29 @@ const OrderList: React.FC = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button
+                    {ordersEnabled && <button
                       onClick={() => handleEdit(order)}
                       className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-black"
                       title="编辑订单"
                     >
                       <Edit className="w-4 h-4" />
-                    </button>
-                    <button
+                    </button>}
+                    {orderSyncEnabled && <button
                       onClick={() => handleSyncSingle(order.order_id)}
                       disabled={syncingOrderId === order.order_id}
                       className="rounded-md p-2 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                       title="同步订单"
                     >
                       <RefreshCw className={`w-4 h-4 ${syncingOrderId === order.order_id ? 'animate-spin' : ''}`} />
-                    </button>
-                    <button
+                    </button>}
+                    {ordersEnabled && <button
                       onClick={() => handleDelete(order.order_id)}
                       disabled={deletingOrderId === order.order_id}
                       className="rounded-md p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                       title="删除订单"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </button>}
                     </div>
                   </td>
                 </tr>

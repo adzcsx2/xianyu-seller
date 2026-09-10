@@ -2,7 +2,7 @@
 
 ## Overview
 
-闲鱼智控（闲鱼超级管家） is an account, item, order, messaging, automated
+闲鱼卖家 is an account, item, order, messaging, automated
 reply, and delivery management system for Xianyu sellers.
 
 - Backend: Python 3.11+, FastAPI, Uvicorn, SQLite, Playwright/Patchright,

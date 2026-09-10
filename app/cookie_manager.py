@@ -4,6 +4,7 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Dict, List, Tuple, Optional
 from loguru import logger
 from app.db_manager import db_manager
+from app.feature_flags import FeatureFlagSnapshot
 
 __all__ = ["CookieManager", "manager"]
 
@@ -57,6 +58,69 @@ class CookieManager:
 
         logger.info(f"数据重新加载完成: Cookie {old_cookies_count} -> {new_cookies_count}, 关键字组 {old_keywords_count} -> {new_keywords_count}")
         return True
+
+    async def _apply_feature_flags_async(self, snapshot: FeatureFlagSnapshot):
+        """在 CookieManager 所属事件循环中收敛所有在线实例。"""
+        instance_items = list(self.instances.items())
+        if not instance_items:
+            return {
+                "status": "pending",
+                "instances": {},
+                "reason": "no active account instances",
+            }
+
+        statuses = {}
+        for cookie_id, instance in instance_items:
+            try:
+                await instance.reconcile_feature_tasks()
+                statuses[cookie_id] = "applied"
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                statuses[cookie_id] = "failed"
+                logger.error(
+                    f"【{cookie_id}】应用功能快照失败: {type(exc).__name__}"
+                )
+
+        status_values = set(statuses.values())
+        status = "applied" if status_values == {"applied"} else "failed"
+        return {"status": status, "instances": statuses}
+
+    def apply_feature_flags(self, snapshot: FeatureFlagSnapshot, timeout: float = 5.0):
+        """线程安全地请求实例应用功能快照，返回应用摘要而非跨 loop task。"""
+        if not self.loop.is_running():
+            return {
+                "status": "pending",
+                "instances": {},
+                "reason": "CookieManager loop is not running",
+            }
+
+        coroutine = self._apply_feature_flags_async(snapshot)
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if current_loop is self.loop:
+            return self.loop.create_task(coroutine)
+
+        future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            future.cancel()
+            return {
+                "status": "pending",
+                "instances": {},
+                "reason": "feature flag application timed out",
+            }
+        except Exception as exc:
+            logger.error(f"应用功能快照失败: {type(exc).__name__}")
+            return {
+                "status": "failed",
+                "instances": {},
+                "reason": "feature flag application failed",
+            }
 
     # ------------------------ 内部协程 ------------------------
     async def _run_xianyu(self, cookie_id: str, cookie_value: str, user_id: int = None):

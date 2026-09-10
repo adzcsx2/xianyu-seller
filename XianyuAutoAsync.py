@@ -24,6 +24,7 @@ import sys
 import aiohttp
 from collections import defaultdict
 from app.db_manager import db_manager
+from app.feature_flags import FEATURE_FLAG_REGISTRY
 from app.specification import combine_legacy_specification
 from utils.log_sanitizer import redact_log_record, redact_sensitive_text
 from utils.mtop_browser_fingerprint import build_mtop_request_headers
@@ -211,6 +212,16 @@ class XianyuLive:
     # 类级别的密码登录时间记录，用于防止重复登录
     _last_password_login_time = {}  # {cookie_id: timestamp}
     _password_login_cooldown = 60  # 密码登录冷却时间：60秒
+
+    _OPTIONAL_TASK_SPECS = (
+        ("token_refresh_task", "token_refresh_loop", "scheduled_token_refresh_enabled", "Token刷新"),
+        ("cookie_refresh_task", "cookie_refresh_loop", "browser_cookie_refresh_enabled", "Cookie刷新"),
+        ("item_sync_task", "item_sync_loop", "item_sync_enabled", "商品同步"),
+        ("order_sync_task", "order_sync_loop", "order_sync_enabled", "订单同步"),
+        ("item_polish_task", "item_polish_loop", "auto_polish_enabled", "商品擦亮"),
+        ("delivery_timeout_task", "delivery_timeout_loop", "delivery_timeout_alert_enabled", "发货超时检查"),
+        ("buyer_interaction_task", "buyer_interaction_loop", "feature_buyer_interaction_enabled", "买家互动"),
+    )
     
     def _safe_str(self, e):
         """安全地将异常转换为字符串"""
@@ -382,6 +393,12 @@ class XianyuLive:
                 else:
                     logger.debug(f"【{self.cookie_id}】买家互动任务已完成，跳过")
 
+            if self.profile_sync_task:
+                if not self.profile_sync_task.done():
+                    tasks_to_cancel.append(("账号资料同步", self.profile_sync_task))
+                else:
+                    logger.debug(f"【{self.cookie_id}】账号资料同步已完成，跳过")
+
             if not tasks_to_cancel:
                 logger.info(f"【{self.cookie_id}】没有后台任务需要取消（所有任务已完成或不存在）")
                 # 立即重置任务引用
@@ -394,6 +411,7 @@ class XianyuLive:
                 self.item_polish_task = None
                 self.delivery_timeout_task = None
                 self.buyer_interaction_task = None
+                self.profile_sync_task = None
                 return
             
             logger.info(f"【{self.cookie_id}】开始取消 {len(tasks_to_cancel)} 个未完成的后台任务...")
@@ -533,6 +551,7 @@ class XianyuLive:
             self.item_polish_task = None
             self.delivery_timeout_task = None
             self.buyer_interaction_task = None
+            self.profile_sync_task = None
             logger.info(f"【{self.cookie_id}】后台任务引用已全部重置")
 
     # 平台风控/人机验证的特征串。命中后必须大幅退避 —— 继续高频重试只会
@@ -834,6 +853,7 @@ class XianyuLive:
 
         # 账号资料只在连接成功后同步一次，避免重连时反复请求
         self._profile_synced = False
+        self.profile_sync_task = None
 
         # 买家互动（评价/求花）：记录已处理订单，两者都默认关闭
         self.buyer_interaction_task = None
@@ -958,6 +978,91 @@ class XianyuLive:
         self.background_tasks.add(task)
         task.add_done_callback(self.background_tasks.discard)
         return task
+
+    def get_effective_feature_flags(self) -> dict[str, bool]:
+        """读取当前账号实例应遵守的 effective 功能快照。
+
+        功能开关读取失败时对可选功能 fail closed；聊天核心任务不经过此映射。
+        """
+        try:
+            snapshot = db_manager.get_feature_flags()
+            effective = getattr(snapshot, "effective", None)
+            if isinstance(effective, dict):
+                return {
+                    key: effective.get(key, False)
+                    for key in FEATURE_FLAG_REGISTRY.keys()
+                }
+        except Exception as exc:
+            logger.warning(
+                f"【{self.cookie_id}】读取功能快照失败，可选功能暂时关闭: {type(exc).__name__}"
+            )
+        return {key: False for key in FEATURE_FLAG_REGISTRY.keys()}
+
+    def is_feature_enabled(self, feature_key: str) -> bool:
+        """读取单个 effective 开关；未知 key 按关闭处理。"""
+        return self.get_effective_feature_flags().get(feature_key, False)
+
+    @staticmethod
+    def _clear_optional_task_reference(instance, attribute: str, task: asyncio.Task):
+        if getattr(instance, attribute, None) is task:
+            setattr(instance, attribute, None)
+
+    def _start_optional_task(self, attribute: str, method_name: str, label: str):
+        """在当前事件循环中幂等启动一个可选后台任务。"""
+        current = getattr(self, attribute, None)
+        if current is not None and not current.done():
+            return current
+        if current is not None and current.done():
+            setattr(self, attribute, None)
+
+        task = asyncio.create_task(
+            getattr(self, method_name)(),
+            name=f"xianyu-{method_name}-{self.cookie_id}",
+        )
+        setattr(self, attribute, task)
+        task.add_done_callback(
+            lambda done_task: self._clear_optional_task_reference(self, attribute, done_task)
+        )
+        logger.info(f"【{self.cookie_id}】启动可选任务: {label}")
+        return task
+
+    async def _cancel_optional_task(self, attribute: str, label: str) -> bool:
+        """取消一个可选任务，等待其 finally 完成后清空引用。"""
+        task = getattr(self, attribute, None)
+        if task is None:
+            return False
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        if getattr(self, attribute, None) is task:
+            setattr(self, attribute, None)
+        logger.info(f"【{self.cookie_id}】停止可选任务: {label}")
+        return True
+
+    async def reconcile_feature_tasks(self):
+        """按 effective snapshot 幂等收敛所有可选 task。
+
+        此方法只能在 XianyuLive 所属事件循环中调用；跨线程调用由 CookieManager
+        负责投递到该 loop。heartbeat、pause cleanup 和 WebSocket 注册不在这里管理。
+        """
+        effective = self.get_effective_feature_flags()
+        for attribute, method_name, feature_key, label in self._OPTIONAL_TASK_SPECS:
+            if effective.get(feature_key, False):
+                self._start_optional_task(attribute, method_name, label)
+            else:
+                await self._cancel_optional_task(attribute, label)
+
+        profile_enabled = effective.get("account_profile_auto_sync_enabled", False)
+        profile_task = getattr(self, "profile_sync_task", None)
+        if profile_enabled and not getattr(self, "_profile_synced", False):
+            if profile_task is None or profile_task.done():
+                self._profile_synced = True
+                self.profile_sync_task = self._create_tracked_task(
+                    self._sync_account_profile()
+                )
+                logger.info(f"【{self.cookie_id}】启动账号资料一次性同步")
+        elif not profile_enabled:
+            await self._cancel_optional_task("profile_sync_task", "账号资料同步")
 
     def is_auto_confirm_enabled(self) -> bool:
         """检查当前账号是否启用自动确认发货"""
@@ -1721,6 +1826,10 @@ class XianyuLive:
                                    item_id: str, chat_id: str, msg_time: str):
         """统一处理自动发货逻辑"""
         try:
+            if not self.is_feature_enabled("auto_delivery_enabled"):
+                logger.debug(f"【{self.cookie_id}】自动发货功能已关闭，跳过消息动作")
+                return {"success": False, "code": "feature_disabled"}
+
             # 检查商品是否属于当前cookies
             if item_id and item_id != "未知商品":
                 try:
@@ -5752,6 +5861,9 @@ class XianyuLive:
 
     async def auto_freeshipping(self, order_id, item_id, buyer_id, retry_count=0):
         """自动免拼发货 - 使用解密模块"""
+        if not self.is_feature_enabled("auto_delivery_enabled"):
+            logger.debug(f"【{self.cookie_id}】自动发货功能已关闭，跳过免拼动作")
+            return {"success": False, "code": "feature_disabled"}
         try:
             logger.warning(f"【{self.cookie_id}】开始免拼发货，订单ID: {order_id}")
 
@@ -6612,6 +6724,9 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("scheduled_token_refresh_enabled"):
+                        logger.debug(f"【{self.cookie_id}】周期 Token 刷新已关闭，停止循环")
+                        break
                     # 检查账号是否启用
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
@@ -7137,6 +7252,9 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("item_sync_enabled"):
+                        await self._interruptible_sleep(60)
+                        continue
                     # 检查账号是否启用
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
@@ -7145,12 +7263,11 @@ class XianyuLive:
 
                     # 从数据库读取最新配置（支持动态更新）
                     from app.db_manager import db_manager
-                    item_sync_enabled_str = db_manager.get_system_setting('item_sync_enabled')
                     item_sync_interval_str = db_manager.get_system_setting('item_sync_interval')
                     item_sync_max_pages_str = db_manager.get_system_setting('item_sync_max_pages')
 
-                    # 使用数据库配置，如果不存在则使用实例变量（从global_config.yml读取的默认值）
-                    item_sync_enabled = item_sync_enabled_str == 'true' if item_sync_enabled_str is not None else self.item_sync_enabled
+                    # Boolean 统一来自 feature snapshot；interval/max_pages 仍是普通参数。
+                    item_sync_enabled = self.is_feature_enabled("item_sync_enabled")
                     item_sync_interval = int(item_sync_interval_str) if item_sync_interval_str is not None else self.item_sync_interval
                     item_sync_max_pages = int(item_sync_max_pages_str) if item_sync_max_pages_str is not None else self.item_sync_max_pages
 
@@ -7240,17 +7357,18 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("feature_orders_enabled"):
+                        logger.debug(f"【{self.cookie_id}】订单功能已关闭，停止订单同步")
+                        break
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
                         logger.info(f"【{self.cookie_id}】账号已禁用，停止订单同步循环")
                         break
 
                     from app.db_manager import db_manager
-                    enabled_str = db_manager.get_system_setting('order_sync_enabled')
                     interval_str = db_manager.get_system_setting('order_sync_interval')
 
-                    # 默认开启，间隔 30 分钟
-                    enabled = enabled_str != 'false'
+                    enabled = self.is_feature_enabled("order_sync_enabled")
                     try:
                         interval = int(interval_str) if interval_str else 7200
                     except (TypeError, ValueError):
@@ -7335,17 +7453,18 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("auto_polish_enabled"):
+                        await self._interruptible_sleep(120)
+                        continue
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
                         logger.info(f"【{self.cookie_id}】账号已禁用，停止商品擦亮循环")
                         break
 
                     from app.db_manager import db_manager
-                    enabled_str = db_manager.get_system_setting('auto_polish_enabled')
                     interval_str = db_manager.get_system_setting('auto_polish_interval')
 
-                    # 默认关闭：擦亮是对外动作，由用户显式开启
-                    enabled = str(enabled_str or '').strip().lower() in ('1', 'true', 'yes')
+                    enabled = self.is_feature_enabled("auto_polish_enabled")
                     try:
                         interval = int(interval_str) if interval_str else 21600
                     except (TypeError, ValueError):
@@ -7431,17 +7550,18 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("delivery_timeout_alert_enabled"):
+                        await self._interruptible_sleep(120)
+                        continue
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
                         logger.info(f"【{self.cookie_id}】账号已禁用，停止发货超时检查")
                         break
 
                     from app.db_manager import db_manager
-                    enabled_str = db_manager.get_system_setting('delivery_timeout_alert_enabled')
                     interval_str = db_manager.get_system_setting('delivery_timeout_interval')
 
-                    # 默认开启：超时会被平台处罚，属于必要提醒
-                    enabled = str(enabled_str or '').strip().lower() != 'false'
+                    enabled = self.is_feature_enabled("delivery_timeout_alert_enabled")
                     try:
                         interval = int(interval_str) if interval_str else 3600
                     except (TypeError, ValueError):
@@ -7566,6 +7686,9 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("feature_buyer_interaction_enabled"):
+                        logger.debug(f"【{self.cookie_id}】买家互动功能已关闭，停止轮询")
+                        break
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
                         logger.info(f"【{self.cookie_id}】账号已禁用，停止买家互动任务")
@@ -7643,6 +7766,10 @@ class XianyuLive:
         """
         from app.db_manager import db_manager
 
+        if not self.is_feature_enabled("feature_buyer_interaction_enabled"):
+            logger.debug(f"【{self.cookie_id}】买家互动功能已关闭，跳过收货致谢")
+            return False
+
         if not db_manager.get_buyer_interaction_settings(
             self.cookie_id
         )['auto_thanks_enabled']:
@@ -7687,6 +7814,10 @@ class XianyuLive:
         同一时刻只允许一个触发在跑：确认收货往往伴随多条系统消息（交易成功、
         评价提醒、小红花提醒），每条都触发一次会连着打同一个接口。
         """
+        if not self.is_feature_enabled("feature_buyer_interaction_enabled"):
+            logger.debug(f"【{self.cookie_id}】买家互动功能已关闭，跳过即时互动: {reason}")
+            return False
+
         if getattr(self, '_buyer_interaction_triggering', False):
             logger.debug(f"【{self.cookie_id}】买家互动已在触发中，忽略重复的「{reason}」")
             return
@@ -7739,6 +7870,10 @@ class XianyuLive:
         判定依据来自订单接口：``sellerRateStatus`` 为 4 表示卖家已评价，
         ``REQUIRE_FLOWER`` 出现在可执行动作里才说明该单能求花。
         """
+        if not self.is_feature_enabled("feature_buyer_interaction_enabled"):
+            logger.debug(f"【{self.cookie_id}】买家互动功能已关闭，阻断评价/求花请求")
+            return {"rated": 0, "flowered": 0}
+
         from app.db_manager import db_manager
         from utils.xianyu_seller_api import (
             XianyuSellerAPI,
@@ -7806,6 +7941,9 @@ class XianyuLive:
         try:
             while True:
                 try:
+                    if not self.is_feature_enabled("browser_cookie_refresh_enabled"):
+                        logger.debug(f"【{self.cookie_id}】周期 Cookie 刷新已关闭，停止循环")
+                        break
                     # 检查账号是否启用
                     from app.cookie_manager import manager as cookie_manager
                     if cookie_manager and not cookie_manager.get_cookie_status(self.cookie_id):
@@ -9378,6 +9516,10 @@ class XianyuLive:
             item_id: 商品ID
             msg_time: 消息时间
         """
+        if not self.is_feature_enabled("feature_auto_reply_enabled"):
+            logger.debug(f"【{self.cookie_id}】自动回复功能已关闭，跳过防抖回复")
+            return False
+
         # 提取消息ID并检查是否已处理
         message_id = self._extract_message_id(message_data)
         # 如果没有 messageId，使用备用标识（chat_id + send_message + 时间戳）
@@ -9943,7 +10085,13 @@ class XianyuLive:
             # 【优先处理】尝试获取订单ID并获取订单详情
             order_id = None
             try:
-                order_id = self._extract_order_id(message)
+                order_id = (
+                    self._extract_order_id(message)
+                    if self.is_feature_enabled("feature_orders_enabled")
+                    else None
+                )
+                if not order_id and not self.is_feature_enabled("feature_orders_enabled"):
+                    logger.debug(f"【{self.cookie_id}】订单功能已关闭，跳过订单事件副作用")
                 if order_id:
                     msg_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                     logger.info(f'[{msg_time}] 【{self.cookie_id}】✅ 检测到订单ID: {order_id}，开始获取订单详情')
@@ -10288,6 +10436,9 @@ class XianyuLive:
 
                     # 检查是否为"我已小刀，待刀成"
                     if card_title == "我已小刀，待刀成":
+                        if not self.is_feature_enabled("auto_delivery_enabled"):
+                            logger.debug(f"【{self.cookie_id}】自动发货功能已关闭，跳过免拼卡片动作")
+                            return
                         logger.info(f'[{msg_time}] 【{self.cookie_id}】【系统】检测到"我已小刀，待刀成"，即使在暂停期间也继续处理')
 
                         # 检查商品是否属于当前cookies
@@ -10410,85 +10561,28 @@ class XianyuLive:
                             logger.info(f"【{self.cookie_id}】启动心跳任务...")
                             self.heartbeat_task = asyncio.create_task(self.heartbeat_loop(websocket))
 
-                            # 启动其他后台任务（不依赖WebSocket，只在首次连接时启动）
-                            tasks_started = []
-                            
-                            if not self.token_refresh_task or self.token_refresh_task.done():
-                                logger.info(f"【{self.cookie_id}】启动Token刷新任务...")
-                                self.token_refresh_task = asyncio.create_task(self.token_refresh_loop())
-                                tasks_started.append("Token刷新")
-                            else:
-                                logger.info(f"【{self.cookie_id}】Token刷新任务已在运行，跳过启动")
-
+                            # 暂停记录清理属于本地核心维护，不受可选功能开关影响。
                             if not self.cleanup_task or self.cleanup_task.done():
                                 logger.info(f"【{self.cookie_id}】启动暂停记录清理任务...")
-                                self.cleanup_task = asyncio.create_task(self.pause_cleanup_loop())
-                                tasks_started.append("暂停清理")
-                            else:
-                                logger.info(f"【{self.cookie_id}】暂停记录清理任务已在运行，跳过启动")
+                                self.cleanup_task = asyncio.create_task(
+                                    self.pause_cleanup_loop(),
+                                    name=f"xianyu-pause-cleanup-{self.cookie_id}",
+                                )
 
-                            if not self.cookie_refresh_task or self.cookie_refresh_task.done():
-                                logger.info(f"【{self.cookie_id}】启动Cookie刷新任务...")
-                                self.cookie_refresh_task = asyncio.create_task(self.cookie_refresh_loop())
-                                tasks_started.append("Cookie刷新")
-                            else:
-                                logger.info(f"【{self.cookie_id}】Cookie刷新任务已在运行，跳过启动")
+                            # 所有可选 task 和连接后资料同步均由同一收敛入口管理。
+                            # heartbeat 与 pause cleanup 是聊天核心/本地维护，不进入功能开关表。
+                            await self.reconcile_feature_tasks()
 
-                            # 启动商品同步任务
-                            if self.item_sync_enabled:
-                                if not self.item_sync_task or self.item_sync_task.done():
-                                    logger.info(f"【{self.cookie_id}】启动商品同步任务（间隔: {self.item_sync_interval}秒）...")
-                                    self.item_sync_task = asyncio.create_task(self.item_sync_loop())
-                                    tasks_started.append("商品同步")
-                                else:
-                                    logger.info(f"【{self.cookie_id}】商品同步任务已在运行，跳过启动")
-                            else:
-                                logger.info(f"【{self.cookie_id}】商品同步功能未启用")
-
-                            # 启动订单同步任务：补齐监听离线期间产生的订单
-                            if not self.order_sync_task or self.order_sync_task.done():
-                                logger.info(f"【{self.cookie_id}】启动订单同步任务...")
-                                self.order_sync_task = asyncio.create_task(self.order_sync_loop())
-                                tasks_started.append("订单同步")
-                            else:
-                                logger.info(f"【{self.cookie_id}】订单同步任务已在运行，跳过启动")
-
-                            # 连接成功后补齐账号资料。此前只有手动点"刷新"才会拉，
-                            # 新登录的账号在列表里没有昵称和头像，看着像没登录成功。
-                            if not self._profile_synced:
-                                self._profile_synced = True
-                                self._create_tracked_task(self._sync_account_profile())
-
-                            # 启动商品擦亮任务（是否真正执行由设置开关决定）
-                            if not self.item_polish_task or self.item_polish_task.done():
-                                logger.info(f"【{self.cookie_id}】启动商品擦亮任务...")
-                                self.item_polish_task = asyncio.create_task(self.item_polish_loop())
-                                tasks_started.append("商品擦亮")
-                            else:
-                                logger.info(f"【{self.cookie_id}】商品擦亮任务已在运行，跳过启动")
-
-                            # 启动发货超时检查：超时未发货会被平台处罚
-                            if not self.delivery_timeout_task or self.delivery_timeout_task.done():
-                                logger.info(f"【{self.cookie_id}】启动发货超时检查...")
-                                self.delivery_timeout_task = asyncio.create_task(self.delivery_timeout_loop())
-                                tasks_started.append("发货超时检查")
-                            else:
-                                logger.info(f"【{self.cookie_id}】发货超时检查已在运行，跳过启动")
-
-                            # 启动买家互动任务（评价/求花，是否执行由开关决定）
-                            if not self.buyer_interaction_task or self.buyer_interaction_task.done():
-                                logger.info(f"【{self.cookie_id}】启动买家互动任务...")
-                                self.buyer_interaction_task = asyncio.create_task(self.buyer_interaction_loop())
-                                tasks_started.append("买家互动")
-                            else:
-                                logger.info(f"【{self.cookie_id}】买家互动任务已在运行，跳过启动")
-
-                            # 记录所有后台任务状态
-                            if tasks_started:
-                                logger.info(f"【{self.cookie_id}】✅ 新启动的任务: {', '.join(tasks_started)}")
-                            item_sync_status = '运行中' if self.item_sync_task and not self.item_sync_task.done() else '已启动' if self.item_sync_enabled else '未启用'
-                            order_sync_status = '运行中' if self.order_sync_task and not self.order_sync_task.done() else '已启动'
-                            logger.info(f"【{self.cookie_id}】✅ 所有后台任务状态: 心跳(已启动), Token刷新({'运行中' if self.token_refresh_task and not self.token_refresh_task.done() else '已启动'}), 暂停清理({'运行中' if self.cleanup_task and not self.cleanup_task.done() else '已启动'}), Cookie刷新({'运行中' if self.cookie_refresh_task and not self.cookie_refresh_task.done() else '已启动'}), 商品同步({item_sync_status}), 订单同步({order_sync_status})")
+                            logger.info(
+                                f"【{self.cookie_id}】✅ 后台任务已按 effective 功能快照收敛: "
+                                f"token={bool(self.token_refresh_task and not self.token_refresh_task.done())}, "
+                                f"cookie={bool(self.cookie_refresh_task and not self.cookie_refresh_task.done())}, "
+                                f"item={bool(self.item_sync_task and not self.item_sync_task.done())}, "
+                                f"order={bool(self.order_sync_task and not self.order_sync_task.done())}, "
+                                f"polish={bool(self.item_polish_task and not self.item_polish_task.done())}, "
+                                f"delivery_timeout={bool(self.delivery_timeout_task and not self.delivery_timeout_task.done())}, "
+                                f"buyer_interaction={bool(self.buyer_interaction_task and not self.buyer_interaction_task.done())}"
+                            )
                             
                             logger.info(f"【{self.cookie_id}】开始监听WebSocket消息...")
                             logger.info(f"【{self.cookie_id}】WebSocket连接状态正常，等待服务器消息...")

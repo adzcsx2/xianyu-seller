@@ -3,6 +3,9 @@ import Sidebar from './components/Sidebar';
 import GlobalFeedback from './components/GlobalFeedback';
 import AnnouncementBanner from './components/AnnouncementBanner';
 import ThemeToggle from './components/ThemeToggle';
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
+import { useFeatureFlags } from './contexts/FeatureFlagsContext';
+import { isFeaturePageEnabled } from './lib/featureRegistry';
 import { login, verifyToken, getPublicSettings, register, sendVerificationCode } from './services/api';
 import { ShieldCheck, ArrowRight, Loader2, User, Lock, Menu, Mail, KeyRound, CheckCircle2 } from 'lucide-react';
 
@@ -43,6 +46,38 @@ const pageLabels: Record<string, string> = {
   notifications: '通知与日志',
   settings: '系统设置',
   about: '关于',
+};
+
+interface FeaturePageProps {
+  pageId: string;
+  active: boolean;
+  onUnavailable: () => void;
+  fallback: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}
+
+const FeaturePage: React.FC<FeaturePageProps> = ({
+  pageId,
+  active,
+  onUnavailable,
+  fallback,
+  className,
+  children,
+}) => {
+  const { snapshot: featureSnapshot, loading: featureFlagsLoading } = useFeatureFlags();
+  const enabled = isFeaturePageEnabled(featureSnapshot, pageId);
+
+  useEffect(() => {
+    if (active && !featureFlagsLoading && !enabled) onUnavailable();
+  }, [active, enabled, featureFlagsLoading, onUnavailable]);
+
+  if (!active || !enabled) return null;
+  return (
+    <section className={className}>
+      <Suspense fallback={fallback}>{children}</Suspense>
+    </section>
+  );
 };
 
 const App: React.FC = () => {
@@ -280,9 +315,9 @@ const App: React.FC = () => {
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/70 backdrop-blur">
                   <span className="text-2xl font-black text-[#2a2416]">闲</span>
                 </div>
-                <p className="mt-7 text-xs font-bold tracking-widest text-[#8a6300]">XIANYU SUPER BUTLER</p>
+                <p className="mt-7 text-xs font-bold tracking-widest text-[#8a6300]">XIANYU SELLER</p>
                 <h1 className="mt-2 max-w-md text-3xl font-extrabold leading-tight text-[#2a2416]">
-                  闲鱼超级管家
+                  闲鱼卖家
                 </h1>
                 <p className="mt-4 max-w-md text-sm leading-7 text-[#6b5200]">
                   统一处理账号、商品、订单、消息、回复和自动发货。
@@ -501,7 +536,7 @@ const App: React.FC = () => {
                 )}
 
                 <p className="mt-7 border-t border-gray-100 pt-5 text-xs font-medium text-gray-400">
-                  闲鱼超级管家 · Management Console
+                  闲鱼卖家 · Management Console
                 </p>
               </div>
             </div>
@@ -512,9 +547,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-[var(--app-bg)] text-[var(--text)]">
-      <GlobalFeedback />
-      <Sidebar 
+    <FeatureFlagsProvider isAdmin={isAdmin}>
+      <div className="flex min-h-screen bg-[var(--app-bg)] text-[var(--text)]">
+        <GlobalFeedback />
+        <Sidebar
         activeTab={activeTab} 
         setActiveTab={(tab) => {
           setActiveTab(tab);
@@ -526,7 +562,7 @@ const App: React.FC = () => {
             localStorage.removeItem('auth_token');
             window.location.reload();
         } : undefined}
-      />
+        />
       
       <main className="min-h-screen min-w-0 flex-1 overflow-y-auto lg:ml-[248px]">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 lg:hidden">
@@ -540,8 +576,8 @@ const App: React.FC = () => {
             <Menu className="w-5 h-5" />
           </button>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{pageLabels[activeTab] || '闲鱼超级管家'}</p>
-            <p className="text-[11px] text-gray-400">闲鱼超级管家</p>
+            <p className="truncate text-sm font-bold">{pageLabels[activeTab] || '闲鱼卖家'}</p>
+            <p className="text-[11px] text-gray-400">闲鱼卖家</p>
           </div>
           <ThemeToggle compact className="ml-auto" />
         </header>
@@ -551,55 +587,24 @@ const App: React.FC = () => {
             ? 'h-[calc(100vh-3.5rem)] lg:h-screen overflow-hidden'
             : 'mx-auto max-w-[1320px] p-4 pb-10 sm:p-6 lg:p-8'
         }>
-          <section hidden={activeTab !== 'dashboard'}>
-            <Suspense fallback={activeTab === 'dashboard' ? <PageLoader /> : null}><Dashboard /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'accounts'}>
-            <Suspense fallback={activeTab === 'accounts' ? <PageLoader /> : null}><AccountList /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'items'}>
-            <Suspense fallback={activeTab === 'items' ? <PageLoader /> : null}><ItemList /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'product-automation'}>
-            <Suspense fallback={activeTab === 'product-automation' ? <PageLoader /> : null}><ProductAutomation /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'orders'}>
-            <Suspense fallback={activeTab === 'orders' ? <PageLoader /> : null}><OrderList /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'cards'}>
-            <Suspense fallback={activeTab === 'cards' ? <PageLoader /> : null}><CardList /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'auto-reply'}>
-            <Suspense fallback={activeTab === 'auto-reply' ? <PageLoader /> : null}><Keywords mode="reply" /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'ai-reply'}>
-            <Suspense fallback={activeTab === 'ai-reply' ? <PageLoader /> : null}><AIReply /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'knowledge-base'}>
-            <Suspense fallback={activeTab === 'knowledge-base' ? <PageLoader /> : null}><KnowledgeBase /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'messages'} className="h-full min-h-0">
-            <Suspense fallback={activeTab === 'messages' ? <PageLoader /> : null}>
-              <MessageManagement isActive={activeTab === 'messages'} />
-            </Suspense>
-          </section>
-          <section hidden={activeTab !== 'notifications'}>
-            <Suspense fallback={activeTab === 'notifications' ? <PageLoader /> : null}>
-              <NotificationsAndLogs isAdmin={isAdmin} />
-            </Suspense>
-          </section>
-          <section hidden={activeTab !== 'settings'}>
-            <Suspense fallback={activeTab === 'settings' ? <PageLoader /> : null}><Settings /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'buyer-interaction'}>
-            <Suspense fallback={activeTab === 'buyer-interaction' ? <PageLoader /> : null}><BuyerInteraction /></Suspense>
-          </section>
-          <section hidden={activeTab !== 'about'}>
-            <Suspense fallback={activeTab === 'about' ? <PageLoader /> : null}><About /></Suspense>
-          </section>
+          <FeaturePage pageId="dashboard" active={activeTab === 'dashboard'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><Dashboard /></FeaturePage>
+          <FeaturePage pageId="accounts" active={activeTab === 'accounts'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><AccountList /></FeaturePage>
+          <FeaturePage pageId="items" active={activeTab === 'items'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><ItemList /></FeaturePage>
+          <FeaturePage pageId="product-automation" active={activeTab === 'product-automation'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><ProductAutomation /></FeaturePage>
+          <FeaturePage pageId="orders" active={activeTab === 'orders'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><OrderList /></FeaturePage>
+          <FeaturePage pageId="cards" active={activeTab === 'cards'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><CardList /></FeaturePage>
+          <FeaturePage pageId="auto-reply" active={activeTab === 'auto-reply'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><Keywords mode="reply" /></FeaturePage>
+          <FeaturePage pageId="ai-reply" active={activeTab === 'ai-reply'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><AIReply /></FeaturePage>
+          <FeaturePage pageId="knowledge-base" active={activeTab === 'knowledge-base'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><KnowledgeBase /></FeaturePage>
+          <FeaturePage pageId="messages" active={activeTab === 'messages'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />} className="h-full min-h-0"><MessageManagement isActive={activeTab === 'messages'} /></FeaturePage>
+          <FeaturePage pageId="notifications" active={activeTab === 'notifications'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><NotificationsAndLogs isAdmin={isAdmin} /></FeaturePage>
+          <FeaturePage pageId="settings" active={activeTab === 'settings'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><Settings /></FeaturePage>
+          <FeaturePage pageId="buyer-interaction" active={activeTab === 'buyer-interaction'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><BuyerInteraction /></FeaturePage>
+          <FeaturePage pageId="about" active={activeTab === 'about'} onUnavailable={() => setActiveTab('dashboard')} fallback={<PageLoader />}><About /></FeaturePage>
         </div>
       </main>
-    </div>
+      </div>
+    </FeatureFlagsProvider>
   );
 };
 

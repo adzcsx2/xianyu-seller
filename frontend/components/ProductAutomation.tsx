@@ -45,6 +45,7 @@ import {
   updateProductMaterial,
 } from '../services/api';
 import { confirmAction, notify } from '../services/feedback';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import {
   EmptyState,
   NoticeBanner,
@@ -114,6 +115,8 @@ const taskNames: Record<string, string> = {
 };
 
 const ProductAutomation: React.FC = () => {
+  const { isEnabled } = useFeatureFlags();
+  const productAutomationEnabled = isEnabled('feature_product_automation_enabled');
   const [activeTab, setActiveTab] = useState<TabKey>('materials');
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [materials, setMaterials] = useState<ProductMaterial[]>([]);
@@ -184,6 +187,7 @@ const ProductAutomation: React.FC = () => {
   }, []);
 
   const saveMaterial = async () => {
+    if (!productAutomationEnabled) return;
     if (!editingMaterial) return;
     setBusyKey(`material-${editingMaterial.id}`);
     try {
@@ -244,6 +248,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const saveFilterRule = async () => {
+    if (!productAutomationEnabled) return;
     if (!filterForm.cookie_id || !filterForm.name.trim()) {
       notify('请选择账号并填写规则名称', 'warning');
       return;
@@ -276,6 +281,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const runFilter = async (rule: ProductFilterRule) => {
+    if (!productAutomationEnabled) return;
     setBusyKey(`filter-run-${rule.id}`);
     try {
       const result = await runProductFilterRule(rule.id);
@@ -289,6 +295,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const removeFilterRule = async (rule: ProductFilterRule) => {
+    if (!productAutomationEnabled) return;
     if (!await confirmAction(`删除筛选规则“${rule.name}”？`, { title: '删除规则', confirmLabel: '删除' })) return;
     try {
       await deleteProductFilterRule(rule.id);
@@ -313,6 +320,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const saveDeletePlan = async () => {
+    if (!productAutomationEnabled) return;
     if (!deleteForm.cookie_id || !deleteForm.name.trim()) {
       notify('请选择账号并填写计划名称', 'warning');
       return;
@@ -344,6 +352,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const runDeletePreview = async (rule: ProductDeleteRule) => {
+    if (!productAutomationEnabled) return;
     setBusyKey(`delete-preview-${rule.id}`);
     try {
       const result = await previewProductDeleteRule(rule.id);
@@ -358,6 +367,7 @@ const ProductAutomation: React.FC = () => {
   };
 
   const removeDeleteRule = async (rule: ProductDeleteRule) => {
+    if (!productAutomationEnabled) return;
     if (!await confirmAction(`删除计划“${rule.name}”？`, { title: '删除计划', confirmLabel: '删除' })) return;
     try {
       await deleteProductDeleteRule(rule.id);
@@ -372,6 +382,7 @@ const ProductAutomation: React.FC = () => {
     key: string,
     action: () => Promise<{ summary: string }>,
   ) => {
+    if (!productAutomationEnabled) return;
     setBusyKey(key);
     try {
       const result = await action();
