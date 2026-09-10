@@ -28,6 +28,16 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
+    const responseData = error.response?.data as { detail?: unknown } | undefined;
+    const detail = responseData?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      error.message = detail;
+    } else if (detail && typeof detail === 'object') {
+      const detailMessage = (detail as { message?: unknown }).message;
+      error.message = typeof detailMessage === 'string' && detailMessage.trim()
+        ? detailMessage
+        : JSON.stringify(detail);
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token');
       try {

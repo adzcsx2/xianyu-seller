@@ -6938,7 +6938,10 @@ async def test_ai_reply(cookie_id: str, test_data: AIReplyTestRequest,
         if reply:
             return {"message": "测试成功", "reply": reply}
         else:
-            raise HTTPException(status_code=400, detail="AI回复生成失败，请检查API Key是否正确、API地址是否可访问")
+            raise HTTPException(
+                status_code=502,
+                detail="AI 服务未返回有效回复，请检查模型地址、模型名称和 API Key",
+            )
 
     except HTTPException:
         raise
