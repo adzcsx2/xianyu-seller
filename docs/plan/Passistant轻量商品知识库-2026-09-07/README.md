@@ -1,6 +1,6 @@
 # Passistant 轻量商品知识库计划
 
-本计划为 `D:\github\xianyu-super-butler` 增加一个按闲鱼账号与商品隔离的轻量商品知识库，并把它接入现有 AI 自动回复。知识内容从 `E:\exilecore2\Passistant` 的当前产品事实中人工白名单整理；运行时不读取 Passistant 源码、不使用向量数据库，也不把内部实现资料交给大模型。
+本计划为 `<repo-root>` 增加一个按闲鱼账号与商品隔离的轻量商品知识库，并把它接入现有 AI 自动回复。知识内容从外部只读产品事实中人工白名单整理；运行时不读取外部源码、不使用向量数据库，也不把内部实现资料交给大模型。
 
 当前仅规划，不修改生产源码、不重启容器、不写运行数据库。后续模型应从 [00-执行文档](./00-执行文档.md) 的进度指针开始执行。
 
@@ -58,7 +58,7 @@
 2. `E:\exilecore2\Passistant\docs\modules\WPF桌面功能清单.md` 的当前产品表面。
 3. `E:\exilecore2\Passistant\docs\product\Passistant官网使用说明需求文档.md` 的公开使用说明合同。
 4. `E:\exilecore2\Passistant\README.md` 与当前有效的产品/指南文档。
-5. `D:\github\xianyu-super-butler` 的运行 API 对唯一商品、价格、AI 设置和发货配置的回读。
+5. `<repo-root>` 的运行 API 对唯一商品、价格、AI 设置和发货配置的回读。
 
 旧计划中的“不要承诺绝对安全或零封号”提示词不再是买家回复合同。本计划以确定性固定句替代，并禁止在无相关提问时主动提及。
 
