@@ -1,28 +1,32 @@
-# 闲鱼卖家
+# 闲鱼卖家自动 AI 聊天
 
-面向闲鱼卖家的本地多账号运营工作台，覆盖账号、商品、订单、消息、自动回复、知识库、卡密和自动发货。聊天核心可以在关闭其他可选业务后独立运行。
+一个面向闲鱼卖家的本地运营工作台，当前版本 `1.1.0`。项目的核心方向是：让 AI 根据商品知识和账号配置，自动参与买家聊天，减少重复回复和人工盯盘。
+
+如果你已经在使用阿奇索自动发货，可以继续让阿奇索负责自动发货，本项目专注自动 AI 聊天，用来补充阿奇索暂未覆盖的自动聊天能力。两者可以按各自擅长的环节搭配使用。
 
 > 本项目 fork 自 [23Star/xianyu-super-butler](https://github.com/23Star/xianyu-super-butler)，仅用于保留直接来源说明。
 
-## 功能
+## 前端功能
 
-- 账号扫码、Cookie 和登录恢复，以及资料同步和连接状态管理。
-- 商品与订单同步、卡密库存、发货规则和风险拦截。
-- 消息中心、手动收发、关键词回复、AI 回复和全局知识库。
-- 买家互动、商品自动化、通知与运行日志。
-- 「系统设置 → 功能区」提供独立 Boolean 开关。关闭功能会隐藏对应页面、阻止服务端动作并收敛后台任务，但保留原有配置，重新开启即可恢复。
-- Token 周期刷新、Cookie 周期刷新等主动任务可以关闭；连接所需的 Token 获取、扫码/人工恢复和手动聊天仍属于恢复与聊天路径。
+前端是一个 React + TypeScript 的卖家控制台，登录后从左侧导航进入各项功能：
 
-## 安全边界
+- **AI 回复**：为不同闲鱼账号配置 OpenAI 兼容模型、回复风格、上下文和启停状态，并可在页面内测试回复效果。
+- **知识库**：维护商品事实、来源、业务规则和问答内容，让 AI 回复更贴合商品信息、价格、发货和售后约束。
+- **消息中心**：查看买家会话、读取聊天记录并进行人工补充回复；适合处理 AI 不确定或需要人工确认的消息。
+- **账号管理**：扫码登录、Cookie 恢复、连接状态、风控状态和账号级 AI 配置集中管理。
+- **商品与发货**：同步商品、查看商品状态和配置本地发货规则；自动发货也可以交给阿奇索处理。
+- **订单管理**：查看订单、同步交易状态，并处理需要人工介入的发货和售后动作。
+- **卡密库存**：管理卡密分组、库存和发货资源，便于本地自动发货流程使用。
+- **总览与通知**：通过经营数据、运行日志和通知快速了解账号、消息、订单及任务状态。
+- **系统设置**：按需启用或关闭商品、订单、AI 回复、知识库、消息等功能，并配置公告和部署参数。
 
-- 功能开关不是删除操作，不会删除商品、订单、卡密、知识库、模板、日志或账号配置。
-- 后端对关闭功能返回稳定的 `409 feature_disabled`；前端隐藏不是安全控制。
-- Cookie、密码、Token、二维码、聊天记录、订单和卡密属于私密业务数据，只保存在本地运行目录，不要提交或发送到外部服务。
-- 自动回复、自动发货和平台账号操作有业务与风控风险。项目不能保证永不出现验证码、限流或账号处罚，请先用测试账号验证。
+### 前端主要页面
 
-## Docker Compose
+![闲鱼卖家前端总览页面](docs/screenshots/dashboard.png)
 
-需要 Docker 和 Docker Compose。源码构建会使用当前分支的前后端代码：
+## 快速开始
+
+需要 Docker 和 Docker Compose：
 
 ```bash
 git clone https://github.com/adzcsx2/xianyu-seller.git
@@ -30,6 +34,8 @@ cd xianyu-seller
 cp .env.example .env
 docker compose up -d --build
 ```
+
+启动后访问 <http://localhost:8080/>。首次使用建议先在 `.env` 中启用登录并修改管理员密码，再添加闲鱼账号和 AI 模型配置。
 
 国内网络环境可以使用：
 
@@ -43,11 +49,7 @@ NAS 或不希望本机构建时，使用：
 docker compose -f docker-compose.nas.yml up -d
 ```
 
-NAS 配置默认使用 `ghcr.io/adzcsx2/xianyu-seller:latest`。启动后访问 `http://localhost:8080/`；带 Nginx 的配置使用 `--profile with-nginx`。升级前请先备份 `data/`、`logs/` 和 `backups/`，并阅读 [迁移说明](docs/MIGRATION.md)。
-
-## 源码运行
-
-需要 Python 3.11+、Node.js 20+、npm 和 Chromium：
+源码运行需要 Python 3.11+、Node.js 20+、npm 和 Chromium：
 
 ```powershell
 py -3.11 -m venv .venv
@@ -61,44 +63,25 @@ Set-Location ..
 python Start.py
 ```
 
-管理后台、API 文档和健康检查分别位于 `/`、`/docs` 和 `/health`。默认管理员配置可在 `.env` 中修改；生产环境请启用登录、替换默认密码，并避免把免登录模式暴露到公网。
+## 使用建议
 
-## 外部服务配置
+1. 在「账号管理」登录并确认闲鱼账号处于在线状态。
+2. 在「知识库」录入商品事实、发货方式、售后规则和常见问答。
+3. 在「AI 回复」为账号配置可信的模型服务，并先使用测试功能确认回复风格。
+4. 在「消息中心」观察实际聊天效果，必要时切换人工回复。
+5. 若使用阿奇索自动发货，将发货职责交给阿奇索，本项目继续负责自动 AI 聊天。
 
-公告、AI 和商品详情服务默认均为未配置，不会因为空值自动请求某个维护者服务。需要使用时，请在「系统设置」或配置文件中显式填写可信地址，并自行核验服务商、密钥、隐私和费用。
+自动回复、账号操作和发货行为可能触发平台风控。请先使用测试账号验证，并妥善保管 Cookie、Token、聊天记录、订单和卡密等私密数据。
 
-## 数据与测试
+## 问题反馈
 
-运行数据位于 `data/`，日志位于 `logs/`，备份位于 `backups/`；这些目录和登录浏览器状态均不应提交。
+使用中有问题、发现缺陷或有功能建议，请提交 [Issue](https://github.com/adzcsx2/xianyu-seller/issues)，并尽量附上复现步骤、运行环境和脱敏后的日志。请不要在 Issue 中提交密码、Cookie、Token、二维码、订单或聊天记录。
 
-```powershell
-python scripts/run_tests.py --list
-python scripts/run_tests.py --suite core --database snapshot
-python scripts/run_tests.py --suite e2e --database snapshot
-python scripts/run_tests.py --suite all --coverage --quality --database snapshot
-```
+## 文档与许可证
 
-## 文档导航
-
-| 文档 | 内容 |
-| --- | --- |
-| [文档索引](docs/README.md) | 按指南、模块、参考、计划和报告浏览全部文档 |
-| [项目概览](docs/guide/PROJECT_OVERVIEW.md) | 运行入口、目录结构和核心边界 |
-| [架构说明](docs/modules/ARCHITECTURE.md) | 后端、前端、任务和数据流 |
-| [接口参考](docs/references/API.md) | 认证、功能开关、AI 模型和健康检查接口 |
-| [部署与排查](docs/deployment.md) | Docker、滑块验证、更新和故障排查 |
-| [自动化测试指南](docs/guide/自动化测试指南.md) | 测试套件、数据库隔离和质量门禁 |
-
-### 最近更新
-
-| 日期 | 描述 |
-| --- | --- |
-| 2026-09-10 | 补充项目总览、架构、接口、依赖和文档索引，并记录 AI 服务安全边界。 |
-
-> 查看全部更新：[文档更新日志](docs/reports/CHANGELOG.md)
-
-问题反馈和版本信息请使用 [Issues](https://github.com/adzcsx2/xianyu-seller/issues) 与 [Releases](https://github.com/adzcsx2/xianyu-seller/releases)。
-
-## 许可证
+- [文档索引](docs/README.md)
+- [项目概览](docs/guide/PROJECT_OVERVIEW.md)
+- [部署与排查](docs/deployment.md)
+- [自动化测试指南](docs/guide/自动化测试指南.md)
 
 本项目使用 [GNU Affero General Public License v3.0](LICENSE)。修改、部署或通过网络向用户提供服务时，请遵守 AGPL-3.0 的相关义务。

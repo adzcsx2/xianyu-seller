@@ -1,55 +1,70 @@
 {
   "version": "1.3",
   "projectType": "generic",
-  "lastUpdate": "2026-09-10T19:10:58+08:00",
-  "lastCommit": "88a1ead6fe694891ce1a867c39e35c07eaf0a6ad",
+  "lastUpdate": "2026-09-10T21:10:23+08:00",
+  "lastCommit": "working-tree",
   "documents": {
     "README.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
-      "sourceFiles": ["README.md"],
-      "lastCommit": "88a1ead"
+      "updatedAt": "2026-09-10T21:10:23+08:00",
+      "sourceFiles": ["README.md", "frontend/", "docs/screenshots/dashboard.png"],
+      "lastCommit": "working-tree"
     },
     "docs/README.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
+      "updatedAt": "2026-09-10T21:10:23+08:00",
       "sourceFiles": ["docs/", "README.md"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "working-tree"
     },
     "guide/PROJECT_OVERVIEW.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
+      "updatedAt": "2026-09-10T21:10:23+08:00",
       "sourceFiles": ["AGENT.md", "Start.py", "app/reply_server.py", "XianyuAutoAsync.py", "frontend/App.tsx"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "working-tree"
     },
     "modules/ARCHITECTURE.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
+      "updatedAt": "2026-09-10T21:10:23+08:00",
       "sourceFiles": ["app/feature_flags.py", "app/ai_config.py", "app/ai_models.py", "app/reply_server.py", "XianyuAutoAsync.py"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "working-tree"
     },
     "modules/INTERFACES.md": {
       "updatedAt": "2026-09-10T19:10:58+08:00",
       "sourceFiles": ["frontend/App.tsx", "frontend/components/Sidebar.tsx", "frontend/contexts/FeatureFlagsContext.tsx", "frontend/lib/featureRegistry.ts"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "bba5719"
     },
     "references/API.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
-      "sourceFiles": ["app/reply_server.py", ".ai/index/backend-apis.json"],
-      "lastCommit": "88a1ead"
+      "updatedAt": "2026-09-10T20:37:00+08:00",
+      "sourceFiles": ["app/reply_server.py", "app/ai_models.py", "tests/test_ai_models.py", ".ai/index/backend-apis.json"],
+      "lastCommit": "bba5719"
     },
     "references/DEPENDENCIES.md": {
       "updatedAt": "2026-09-10T19:10:58+08:00",
       "sourceFiles": ["requirements.txt", "requirements-test.txt", "frontend/package.json", ".env.example", "docker-compose.yml"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "bba5719"
+    },
+    "deployment.md": {
+      "updatedAt": "2026-09-10T20:37:00+08:00",
+      "sourceFiles": ["app/ai_models.py", "docker-compose.yml", ".env.example"],
+      "lastCommit": "bba5719"
+    },
+    "MIGRATION.md": {
+      "updatedAt": "2026-09-10T20:37:00+08:00",
+      "sourceFiles": ["app/ai_models.py", "app/ai_config.py", ".env.example"],
+      "lastCommit": "bba5719"
     },
     "reports/CHANGELOG.md": {
-      "updatedAt": "2026-09-10T19:10:58+08:00",
+      "updatedAt": "2026-09-10T21:10:23+08:00",
       "sourceFiles": ["docs/update-list/update-2026-09-10.md"],
-      "lastCommit": "88a1ead"
+      "lastCommit": "working-tree"
+    },
+    "update-list/update-2026-09-10.md": {
+      "updatedAt": "2026-09-10T21:10:23+08:00",
+      "sourceFiles": ["README.md", "frontend/", "app/announcement.py", "frontend/package.json", "docs/screenshots/dashboard.png"],
+      "lastCommit": "working-tree"
     }
   },
   "updateHistory": [
     {
       "date": "2026-09-10",
       "diffFile": "update-list/update-2026-09-10.md",
-      "summary": "补齐项目文档基线，记录功能开关、AI 配置和模型服务安全边界",
+      "summary": "补齐项目文档基线，记录功能开关、AI 配置、模型服务安全边界和托管运行时公网 DNS 映射兼容规则",
       "documentsUpdated": [
         "README.md",
         "docs/README.md",
