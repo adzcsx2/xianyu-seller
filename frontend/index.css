@@ -12,46 +12,45 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* 牛皮纸白：极低饱和的暖白，比纯白柔和但不发黄。
-     黄色只留给按钮、选中态、徽标这类强调元素 */
-  --app-bg: #f7f6f3;
+  /* 冷静的蓝灰白，给 AI 聊天和运营数据留出清晰阅读空间。 */
+  --app-bg: #f5f9ff;
   --surface: #ffffff;
-  --surface-subtle: #faf9f7;   /* 表头、分段底 */
-  --surface-strong: #f2f1ed;   /* 禁用态、标签槽 */
-  --surface-hover: #faf9f6;    /* 悬停 */
+  --surface-subtle: #f8fbff;   /* 表头、分段底 */
+  --surface-strong: #edf4fc;   /* 禁用态、标签槽 */
+  --surface-hover: #f1f7ff;    /* 悬停 */
 
-  --border: #e9e7e2;
-  --border-strong: #d6d3cc;
-  --border-brand: #ffd400;
+  --border: #e1eaf5;
+  --border-strong: #c7d8eb;
+  --border-brand: #93c5fd;
 
-  --text: #23211e;
-  --text-muted: #6b6862;
-  --text-soft: #76716a;
+  --text: #172b4d;
+  --text-muted: #5b6f8d;
+  --text-soft: #7083a0;
 
   /* Tailwind 灰阶改由主题变量驱动：背景色从浅到深，文字色亦保留原有层级。 */
-  --gray-50: 250 250 248;
-  --gray-100: 245 244 240;
-  --gray-200: 235 233 227;
-  --gray-300: 221 217 208;
-  --gray-400: 118 113 106;
-  --gray-500: 107 104 98;
-  --gray-600: 102 98 92;
-  --gray-700: 74 71 66;
-  --gray-800: 51 48 44;
-  --gray-900: 34 32 29;
+  --gray-50: 248 251 255;
+  --gray-100: 241 246 252;
+  --gray-200: 225 234 245;
+  --gray-300: 204 218 234;
+  --gray-400: 112 131 160;
+  --gray-500: 91 111 141;
+  --gray-600: 75 96 128;
+  --gray-700: 55 77 111;
+  --gray-800: 34 57 91;
+  --gray-900: 23 43 77;
 
-  /* 品牌黄色阶：从浅到深，供背景、描边、悬停、按下各层使用 */
-  --brand-50: #fffdf0;
-  --brand-100: #fff8d1;
-  --brand-200: #ffefa3;
-  --brand-300: #ffe566;
-  --brand: #ffe100;
-  --brand-hover: #ffd700;
-  --brand-active: #f5c800;
-  --brand-ink: #2a2416;        /* 黄底之上的文字色 */
-  --brand-soft: #fff9c9;
-  --brand-text: #806d00;
-  --focus-ring: #806d00;
+  /* 品牌淡蓝阶：从浅到深，供背景、描边、悬停、按下各层使用 */
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #a7d3fc;
+  --brand: #93c5fd;
+  --brand-hover: #60a5fa;
+  --brand-active: #3b82f6;
+  --brand-ink: #0f2b46;        /* 蓝底之上的文字色 */
+  --brand-soft: #e0f2fe;
+  --brand-text: #1d4f7a;
+  --focus-ring: #2563eb;
   --unread-badge: #dc2626;
 
   --danger: #b42318;
@@ -74,54 +73,53 @@
   --radius-xl: 20px;
   --radius-pill: 999px;
 
-  /* 阴影带暖调，与黄色主题一致；不用纯黑投影 */
-  --shadow-sm: 0 1px 2px rgba(35, 33, 30, 0.05);
-  --shadow-md: 0 6px 20px rgba(35, 33, 30, 0.08);
-  --shadow-lg: 0 16px 40px rgba(35, 33, 30, 0.12);
-  --shadow-brand: 0 6px 18px rgba(255, 214, 0, 0.35);
-  --chart-grid: #ebe9e3;
-  --chart-cursor: rgba(35, 33, 30, 0.06);
-  --scrollbar-thumb: #d6d3cc;
-  --scrollbar-thumb-hover: #b9b4aa;
+  /* 阴影使用低饱和蓝色，保持页面轻盈。 */
+  --shadow-sm: 0 1px 2px rgba(23, 43, 77, 0.05);
+  --shadow-md: 0 6px 20px rgba(23, 43, 77, 0.08);
+  --shadow-lg: 0 16px 40px rgba(23, 43, 77, 0.12);
+  --shadow-brand: 0 6px 18px rgba(96, 165, 250, 0.30);
+  --chart-grid: #e1eaf5;
+  --chart-cursor: rgba(37, 99, 235, 0.06);
+  --scrollbar-thumb: #c7d8eb;
+  --scrollbar-thumb-hover: #93afd0;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* 暖黑而非纯黑，延续闲鱼黄的品牌气质，同时拉开三个表面层级。 */
-  --app-bg: #11110f;
-  --surface: #191916;
-  --surface-subtle: #20201c;
-  --surface-strong: #292820;
-  --surface-hover: #302e27;
+  /* 深色模式使用蓝黑底，继续保留淡蓝品牌强调。 */
+  --app-bg: #0f172a;
+  --surface: #162238;
+  --surface-subtle: #1b2b44;
+  --surface-strong: #243754;
+  --surface-hover: #2c4566;
 
-  --border: #37362f;
-  --border-strong: #504c40;
-  --border-brand: #d9bd19;
+  --border: #30445f;
+  --border-strong: #49617f;
+  --border-brand: #5b9bd5;
 
-  --text: #f5f2e8;
-  --text-muted: #c2bcae;
-  --text-soft: #aaa59b;
+  --text: #edf5ff;
+  --text-muted: #b8c9df;
+  --text-soft: #91a7c3;
 
   /* 反转灰阶的语义亮度：bg-gray-50 变暗，text-gray-900 自动变亮。 */
-  --gray-50: 32 32 28;
-  --gray-100: 41 40 34;
-  --gray-200: 56 53 45;
-  --gray-300: 77 72 60;
-  --gray-400: 170 165 155;
-  --gray-500: 174 167 153;
-  --gray-600: 194 188 174;
-  --gray-700: 215 210 198;
-  --gray-800: 234 230 220;
-  --gray-900: 245 242 232;
+  --gray-50: 27 43 68;
+  --gray-100: 36 55 84;
+  --gray-200: 54 77 108;
+  --gray-300: 77 103 137;
+  --gray-400: 145 167 195;
+  --gray-500: 154 178 207;
+  --gray-600: 184 201 223;
+  --gray-700: 205 219 237;
+  --gray-800: 226 237 249;
+  --gray-900: 237 245 255;
 
-  /* 黄色仍保持醒目；浅黄底在暗色中改为低亮度金棕底。 */
-  --brand-50: #292617;
-  --brand-100: #373116;
-  --brand-200: #4b4015;
-  --brand-soft: #393216;
-  --brand-text: #f2d85c;
-  --focus-ring: #f2d85c;
+  --brand-50: #172b44;
+  --brand-100: #1d3a58;
+  --brand-200: #275276;
+  --brand-soft: #1e405f;
+  --brand-text: #b9dcff;
+  --focus-ring: #93c5fd;
 
   --danger: #ff8c8c;
   --danger-ink: #ffaaaa;
@@ -139,11 +137,11 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
   --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.42);
-  --shadow-brand: 0 7px 22px rgba(221, 187, 0, 0.18);
-  --chart-grid: #403d36;
+  --shadow-brand: 0 7px 22px rgba(96, 165, 250, 0.20);
+  --chart-grid: #30445f;
   --chart-cursor: rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb: #5b574e;
-  --scrollbar-thumb-hover: #d2bd38;
+  --scrollbar-thumb: #49617f;
+  --scrollbar-thumb-hover: #93afd0;
 }
 
 html, body, #root {
@@ -294,7 +292,7 @@ select:-webkit-autofill {
 :root[data-theme='dark'] .media-light-surface .text-blue-600 { color: #245f9d !important; }
 :root[data-theme='dark'] .media-light-surface .text-red-600 { color: #c92a2a !important; }
 
-/* Tailwind 的纯白与少量历史硬编码暖白，统一落入暗色表面层。 */
+/* Tailwind 的纯白与少量历史硬编码浅色，统一落入暗色表面层。 */
 :root[data-theme='dark'] .bg-white {
   background-color: var(--surface);
 }
@@ -427,7 +425,7 @@ select:-webkit-autofill {
 :root[data-theme='dark'] [class~='hover:text-yellow-600']:hover { color: var(--warning-ink); }
 :root[data-theme='dark'] [class~='hover:bg-amber-200']:hover { background-color: var(--warning-soft); }
 
-/* 登录页品牌面板永远是亮黄底，不能继承暗色表面的亮文字映射。 */
+/* 登录页品牌面板保持明亮淡蓝底，不能继承暗色表面的亮文字映射。 */
 :root[data-theme='dark'] .theme-brand-panel [class~='text-[#8a6300]'] { color: #8a6300; }
 :root[data-theme='dark'] .theme-brand-panel [class~='text-[#6b5200]'] { color: #6b5200; }
 
@@ -514,7 +512,7 @@ select:-webkit-autofill {
   background: var(--surface-strong);
   padding: 4px;
   /* 溢出时仍可横向滚动，但不显示滚动条 ——
-     胶囊组是圆角浅黄底，底部露出一条滚动轨道很像渲染错位 */
+     胶囊组是圆角浅蓝底，底部露出一条滚动轨道很像渲染错位 */
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -888,7 +886,7 @@ select:-webkit-autofill {
 
 .ios-btn-primary:hover:not(:disabled) {
   background: var(--brand-hover);
-  box-shadow: 0 8px 22px rgba(255, 214, 0, 0.45);
+  box-shadow: 0 8px 22px rgba(59, 130, 246, 0.35);
 }
 
 .ios-btn-primary:active:not(:disabled) {
@@ -993,7 +991,7 @@ select:-webkit-autofill {
   background: var(--scrollbar-thumb-hover);
 }
 
-/* 侧边栏导航：滚动条按需出现，常驻的黄色轨道会在品牌区旁边多出一条竖线 */
+/* 侧边栏导航：滚动条按需出现，避免在品牌区旁边形成额外视觉轨道 */
 aside nav::-webkit-scrollbar {
   width: 4px;
 }
@@ -1034,11 +1032,11 @@ aside nav:hover::-webkit-scrollbar-thumb {
 
 ::selection {
   background: var(--brand);
-  color: #000;
+  color: var(--brand-ink);
 }
 
 .text-brand {
-  color: #8c7900;
+  color: var(--brand-text);
 }
 
 .bg-brand {
@@ -1064,7 +1062,7 @@ aside nav:hover::-webkit-scrollbar-thumb {
 }
 
 .status-badge-warning {
-  background-color: var(--brand-100);
+  background-color: var(--warning-soft);
   color: var(--warning-ink);
 }
 
@@ -1073,7 +1071,7 @@ aside nav:hover::-webkit-scrollbar-thumb {
   color: var(--danger-ink);
 }
 
-/* info 徽标多用于"N 件商品/N 个账号"这类计数，走品牌黄比蓝色更贴主题；
+/* info 徽标多用于"N 件商品/N 个账号"这类计数，使用中性表面；
    真正需要蓝色语义的说明块仍可直接用 blue-* 工具类 */
 .status-badge-info {
   background-color: var(--surface-strong);

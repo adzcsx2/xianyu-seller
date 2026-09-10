@@ -90,7 +90,7 @@ const SettingToggle: React.FC<SettingToggleProps> = ({
       onClick={onChange}
       disabled={disabled}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-        checked ? 'bg-[#ffe100]' : 'bg-gray-300'
+        checked ? 'bg-[var(--brand)]' : 'bg-gray-300'
       } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
     >
       <span

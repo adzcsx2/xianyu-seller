@@ -382,7 +382,7 @@ const Keywords: React.FC<KeywordsProps> = ({ mode }) => {
       aria-label={label}
       onClick={onClick}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-        enabled ? 'bg-[#ffe100]' : 'bg-gray-300'
+        enabled ? 'bg-[var(--brand)]' : 'bg-gray-300'
       }`}
     >
       <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${

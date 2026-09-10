@@ -87,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
       mobileOpen ? 'translate-x-0' : '-translate-x-full'
     }`} style={{ borderRight: '1px solid var(--border)' }}>
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* 品牌区：黄色渐变徽标 + 圆角，作为整站视觉锚点 */}
+        {/* 品牌区：淡蓝渐变徽标 + 圆角，作为整站视觉锚点 */}
         <div className="flex h-[76px] shrink-0 items-center gap-3 px-5">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-xl"
@@ -96,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
               boxShadow: 'var(--shadow-brand)',
             }}
           >
-            <span className="text-lg font-black text-[#2a2416]">闲</span>
+            <span className="text-lg font-black text-[var(--brand-ink)]">闲</span>
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-extrabold text-[var(--text)]">闲鱼卖家</p>
@@ -122,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
                       onClick={() => setActiveTab(item.id)}
                       className={`group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left transition-all ${
                         isActive
-                          ? 'font-bold text-[#2a2416]'
+                          ? 'font-bold text-[var(--brand-ink)]'
                           : 'font-medium text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]'
                       }`}
                       style={isActive ? {
@@ -130,7 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, mo
                         boxShadow: 'var(--shadow-brand)',
                       } : undefined}
                     >
-                      <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[#2a2416]' : 'text-[var(--text-soft)] group-hover:text-[var(--text-muted)]'}`} />
+                      <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[var(--brand-ink)]' : 'text-[var(--text-soft)] group-hover:text-[var(--text-muted)]'}`} />
                       <span className="truncate text-sm">{item.label}</span>
                     </button>
                   );

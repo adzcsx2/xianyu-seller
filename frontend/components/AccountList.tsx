@@ -764,7 +764,7 @@ const AccountList: React.FC = () => {
                     onError={() => setFailedAvatars(previous => new Set(previous).add(account.avatar_url!))}
                   />
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-md bg-yellow-100 text-lg font-bold text-yellow-800">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-md bg-[var(--brand-100)] text-lg font-bold text-[var(--brand-text)]">
                     {account.nickname?.trim().charAt(0) || account.remark?.trim().charAt(0) || '闲'}
                   </div>
                 )}
@@ -834,7 +834,7 @@ const AccountList: React.FC = () => {
                       type="button"
                       onClick={() => handleOpenFreshCaptcha(account.id)}
                       disabled={freshUrlLoadingId === account.id}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#ffe100] px-3 py-1.5 font-bold text-[#2a2416] hover:bg-[#ffd700] disabled:opacity-60"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand)] px-3 py-1.5 font-bold text-[var(--brand-ink)] hover:bg-[var(--brand-hover)] disabled:opacity-60"
                     >
                       {freshUrlLoadingId === account.id
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1072,7 +1072,7 @@ const AccountList: React.FC = () => {
                         href={passwordVerificationUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-4 rounded-md bg-[#ffe100] px-4 py-2 text-xs font-bold text-[#2a2416] hover:bg-[#ffd700]"
+                        className="mt-4 rounded-md bg-[var(--brand)] px-4 py-2 text-xs font-bold text-[var(--brand-ink)] hover:bg-[var(--brand-hover)]"
                       >
                         {passwordVerificationType === 'sms' ? '打开短信验证页面' : '打开验证页面'}
                       </a>
@@ -1191,7 +1191,7 @@ const AccountList: React.FC = () => {
                   type="button"
                   onClick={() => setEditForm({ ...editForm, auto_confirm: !editForm.auto_confirm })}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    editForm.auto_confirm ? 'bg-[#ffe100]' : 'bg-gray-300'
+                    editForm.auto_confirm ? 'bg-[var(--brand)]' : 'bg-gray-300'
                   }`}
                 >
                   <span
@@ -1265,7 +1265,7 @@ const AccountList: React.FC = () => {
                       type="button"
                       onClick={() => setEditForm({ ...editForm, show_browser: !editForm.show_browser })}
                       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                        editForm.show_browser ? 'bg-[#ffe100]' : 'bg-gray-300'
+                        editForm.show_browser ? 'bg-[var(--brand)]' : 'bg-gray-300'
                       }`}
                     >
                       <span
@@ -1341,7 +1341,7 @@ const AccountList: React.FC = () => {
                   type="button"
                   onClick={() => setAiSettings({ ...aiSettings, ai_enabled: !aiSettings.ai_enabled })}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    aiSettings.ai_enabled ? 'bg-[#ffe100]' : 'bg-gray-300'
+                    aiSettings.ai_enabled ? 'bg-[var(--brand)]' : 'bg-gray-300'
                   }`}
                 >
                   <span

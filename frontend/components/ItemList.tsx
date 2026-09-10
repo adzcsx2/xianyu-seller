@@ -166,7 +166,7 @@ const Toggle: React.FC<{
     disabled={disabled}
     onClick={onChange}
     className={`relative inline-flex h-6 w-11 flex-none items-center rounded-full transition-colors ${
-      checked ? 'bg-[#ffe100]' : 'bg-[#e8dcbc]'
+      checked ? 'bg-[var(--brand)]' : 'bg-[var(--surface-strong)]'
     } disabled:cursor-not-allowed disabled:opacity-50`}
   >
     <span
@@ -842,7 +842,7 @@ const ItemList: React.FC = () => {
                   return (
                     <article
                       key={key}
-                      className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#fffdf0] xl:grid-cols-[340px_140px_260px_210px_110px] xl:items-stretch xl:gap-0 xl:px-0 xl:[&>*]:flex xl:[&>*]:min-w-0 xl:[&>*]:flex-col xl:[&>*]:justify-center xl:[&>*]:border-r xl:[&>*]:border-gray-200 xl:[&>*]:px-4 xl:[&>*:first-child]:!flex-row xl:[&>*:first-child]:items-center xl:[&>*:last-child]:border-r-0"
+                      className="grid gap-4 px-4 py-4 transition-colors hover:bg-[var(--brand-50)] xl:grid-cols-[340px_140px_260px_210px_110px] xl:items-stretch xl:gap-0 xl:px-0 xl:[&>*]:flex xl:[&>*]:min-w-0 xl:[&>*]:flex-col xl:[&>*]:justify-center xl:[&>*]:border-r xl:[&>*]:border-gray-200 xl:[&>*]:px-4 xl:[&>*:first-child]:!flex-row xl:[&>*:first-child]:items-center xl:[&>*:last-child]:border-r-0"
                     >
                       <div className="flex min-w-0 gap-3">
                         <div className="h-20 w-20 flex-none overflow-hidden rounded-md border border-gray-200 bg-gray-100">

@@ -121,7 +121,7 @@ const About: React.FC = () => {
               href="https://github.com/adzcsx2/xianyu-seller"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold text-[#8c7900] hover:underline"
+              className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold text-[var(--brand-text)] hover:underline"
             >
               <Github className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">adzcsx2/xianyu-seller</span>

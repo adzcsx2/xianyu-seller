@@ -3,16 +3,16 @@ import { Megaphone, Download, ExternalLink } from 'lucide-react';
 import { getAnnouncement } from '../services/api';
 import { AnnouncementPayload } from '../types';
 
-// info 走品牌黄而不是蓝：公告常驻页面顶部，蓝色会和整站黄色主题打架
+// info 使用品牌淡蓝，和整站主题保持一致；warning/danger 保留状态色
 const levelStyles: Record<string, string> = {
-  info: 'border-[#ffe566] bg-[#fffdf0] text-[#6b5200]',
-  warning: 'border-[#f5c800] bg-[#fff7e6] text-[#8a6300]',
+  info: 'border-blue-200 bg-blue-50 text-blue-800',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800',
   danger: 'border-red-200 bg-red-50 text-red-700',
 };
 
 const levelBadge: Record<string, string> = {
-  info: 'bg-[#ffe100] text-[#2a2416]',
-  warning: 'bg-[#f5c800] text-[#2a2416]',
+  info: 'bg-[var(--brand)] text-[var(--brand-ink)]',
+  warning: 'bg-amber-400 text-amber-950',
   danger: 'bg-red-600 text-white',
 };
 

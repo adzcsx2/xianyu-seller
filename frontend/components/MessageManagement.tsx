@@ -605,7 +605,7 @@ const MessageManagement: React.FC<MessageManagementProps> = ({ isActive = true }
         <div className="min-h-0 flex-1 overflow-y-auto">
           {conversationsLoading && conversations.length === 0 && (
             <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-[#d6b600]" />
+              <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-text)]" />
             </div>
           )}
           {visibleConversations.map((conversation) => {
@@ -721,7 +721,7 @@ const MessageManagement: React.FC<MessageManagementProps> = ({ isActive = true }
             <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--app-bg)] px-4 py-6 sm:px-8">
               {messagesLoading && messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#d6b600]" />
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-text)]" />
                 </div>
               ) : (
                 <div className="mx-auto max-w-4xl space-y-4">
@@ -981,7 +981,7 @@ const MessageManagement: React.FC<MessageManagementProps> = ({ isActive = true }
                   onChange={(event) =>
                     setSelectedFilterIds(event.target.checked ? filters.map((filter) => filter.id) : [])
                   }
-                  className="h-4 w-4 accent-[#f5c400]"
+                  className="h-4 w-4 accent-[var(--brand-active)]"
                 />
                 全选当前列表
               </label>
@@ -1001,7 +1001,7 @@ const MessageManagement: React.FC<MessageManagementProps> = ({ isActive = true }
                         : current.filter((id) => id !== filter.id)
                     )
                   }
-                  className="h-4 w-4 accent-[#f5c400]"
+                  className="h-4 w-4 accent-[var(--brand-active)]"
                 />
                 <button
                   type="button"
@@ -1010,7 +1010,7 @@ const MessageManagement: React.FC<MessageManagementProps> = ({ isActive = true }
                   onClick={() => void toggleMessageFilter(filter.id).then(loadFilters)}
                   title={filter.enabled ? '停用规则' : '启用规则'}
                   className={`relative h-6 w-11 rounded-full transition-colors ${
-                    filter.enabled ? 'bg-[#f5c800]' : 'bg-gray-300'
+                    filter.enabled ? 'bg-[var(--brand-active)]' : 'bg-gray-300'
                   }`}
                 >
                   <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${

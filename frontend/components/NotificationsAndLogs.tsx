@@ -404,7 +404,7 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
                   role="switch"
                   aria-checked={channel.enabled}
                   onClick={() => void toggleChannel(channel)}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${channel.enabled ? 'bg-[#ffe100]' : 'bg-gray-300'}`}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${channel.enabled ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
                   title={channel.enabled ? '停用渠道' : '启用渠道'}
                 >
                   <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${channel.enabled ? 'translate-x-5' : ''}`} />
@@ -496,7 +496,7 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
                     role="switch"
                     aria-checked={binding.enabled}
                     onClick={() => void toggleBinding(binding)}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${binding.enabled ? 'bg-[#ffe100]' : 'bg-gray-300'}`}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${binding.enabled ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
                   >
                     <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${binding.enabled ? 'translate-x-5' : ''}`} />
                   </button>

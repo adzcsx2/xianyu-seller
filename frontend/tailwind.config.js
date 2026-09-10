@@ -2,7 +2,7 @@
 
 // 这里刻意**覆盖** Tailwind 的默认取值，而不是去改组件里的类名：
 // 全站有 395 处 rounded-md、130+ 处 bg-gray-*，逐处替换既容易漏又难回退。
-// 把 md 圆角调大、把 gray 色阶换成暖调，所有组件一次到位。
+// 把 md 圆角调大、把 gray 色阶换成冷静的蓝灰调，所有组件一次到位。
 export default {
   darkMode: 'class',
   content: [
@@ -14,21 +14,20 @@ export default {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#FFE100',
-          50: '#FFFDF0',
-          100: '#FFF8D1',
-          200: '#FFEFA3',
-          300: '#FFE566',
-          400: '#FFE100',
-          500: '#FFD700',
-          600: '#F5C800',
-          700: '#D9A800',
-          800: '#A67F00',
-          900: '#6B5200',
-          ink: '#2A2416',
+          DEFAULT: '#93C5FD',
+          50: '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          300: '#A7D3FC',
+          400: '#93C5FD',
+          500: '#60A5FA',
+          600: '#3B82F6',
+          700: '#2563EB',
+          800: '#1D4ED8',
+          900: '#1E3A8A',
+          ink: '#0F2B46',
         },
-        // 中性色阶：只带极轻微的暖调，避免和黄色强调元素冲突。
-        // 不做成黄色系 —— 全站 130+ 处 bg-gray-* 一旦变黄会让整页发闷。
+        // 中性色阶：只带极轻微的蓝灰调，避免和淡蓝强调元素冲突。
         gray: {
           50: 'rgb(var(--gray-50) / <alpha-value>)',
           100: 'rgb(var(--gray-100) / <alpha-value>)',
@@ -53,10 +52,10 @@ export default {
         '3xl': '32px',
       },
       boxShadow: {
-        brand: '0 6px 18px rgba(255, 214, 0, 0.35)',
-        'brand-lg': '0 10px 28px rgba(255, 214, 0, 0.45)',
-        soft: '0 1px 2px rgba(122, 96, 20, 0.06)',
-        card: '0 6px 20px rgba(122, 96, 20, 0.10)',
+        brand: '0 6px 18px rgba(96, 165, 250, 0.30)',
+        'brand-lg': '0 10px 28px rgba(59, 130, 246, 0.35)',
+        soft: '0 1px 2px rgba(37, 99, 235, 0.06)',
+        card: '0 6px 20px rgba(37, 99, 235, 0.10)',
       },
       fontFamily: {
         sans: [

@@ -9,7 +9,7 @@ import { EmptyState, PageHeader, PageLoading, PageTabs, SectionHeader } from './
 const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
   const styles = {
     processing: 'bg-yellow-100 text-yellow-800',
-    pending_ship: 'bg-[#ffe100] text-black',
+    pending_ship: 'bg-[var(--brand)] text-[var(--brand-ink)]',
     shipped: 'bg-blue-100 text-blue-700',
     completed: 'bg-green-100 text-green-700',
     cancelled: 'bg-gray-100 text-gray-500',
@@ -71,8 +71,8 @@ const Dashboard: React.FC = () => {
 
   // 颜色配置
   // 以品牌黄为主，配少量低饱和辅助色。原来混了纯蓝/纯紫/亮绿，
-  // 几个饼图并排时颜色打架，也压不住整站的黄色主题。
-  const COLORS = ['#ffe100', '#f5c800', '#ffd426', '#e8c86a', '#8fc7a8', '#c9b8e8'];
+  // 几个饼图并排时使用蓝色阶，保持与整站淡蓝主题一致。
+  const COLORS = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#8fc7a8', '#c9b8e8'];
 
   const loadAnalytics = async (range: TimeRange) => {
     // 使用本地时间而不是UTC时间
@@ -488,14 +488,14 @@ const Dashboard: React.FC = () => {
           title="有效成交额 (CNY)"
           value={`¥${analytics.revenue_stats.total_amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`}
           icon={DollarSign}
-          colorClass="bg-[#ffe100]"
+          colorClass="bg-[var(--brand)]"
           trend={getTrendPercent() || undefined}
         />
         <StatCard
           title="已到账 (CNY)"
           value={`¥${(analytics.revenue_stats.confirmed_amount ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`}
           icon={DollarSign}
-          colorClass="bg-[#f5c800]"
+          colorClass="bg-[var(--brand-active)]"
         />
         <StatCard
           title="已退款 (CNY)"
@@ -507,7 +507,7 @@ const Dashboard: React.FC = () => {
           title="订单总数"
           value={totalOrders.toLocaleString()}
           icon={ShoppingCart}
-          colorClass="bg-[#ffd700]"
+          colorClass="bg-[var(--brand-hover)]"
         />
         <StatCard
           title="活跃账号 / 总数"
@@ -583,7 +583,7 @@ const Dashboard: React.FC = () => {
                 />
                 {/* maxBarSize 必须给：只有一两天数据时，柱子会被拉成占满半个图表的
                     巨大色块，看起来像渲染错误。限宽后少量数据也是正常的细柱。 */}
-                <Bar dataKey="amount" fill="#ffd426" radius={[8, 8, 0, 0]} strokeWidth={0} maxBarSize={44} />
+                <Bar dataKey="amount" fill="#60a5fa" radius={[8, 8, 0, 0]} strokeWidth={0} maxBarSize={44} />
                 <Bar dataKey="confirmed" fill="#3fbf7f" radius={[8, 8, 0, 0]} strokeWidth={0} maxBarSize={44} />
               </BarChart>
             </ResponsiveContainer>
@@ -630,7 +630,7 @@ const Dashboard: React.FC = () => {
                     cursor={{ fill: 'var(--chart-cursor)', radius: 8 }}
                   />
                   {/* 同上：商品只有一两个时不限宽会变成超粗横条 */}
-                  <Bar dataKey="sales" fill="#ffd426" radius={[0, 8, 8, 0]} maxBarSize={28} />
+                  <Bar dataKey="sales" fill="#3b82f6" radius={[0, 8, 8, 0]} maxBarSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             )}

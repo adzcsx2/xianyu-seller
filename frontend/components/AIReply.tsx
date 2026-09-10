@@ -265,7 +265,7 @@ const AIReply: React.FC = () => {
                 type="checkbox"
                 checked={settings.ai_enabled}
                 onChange={event => updateSetting('ai_enabled', event.target.checked)}
-                className="h-5 w-5 accent-yellow-400"
+                className="h-5 w-5 accent-[var(--brand-active)]"
               />
             </label>
           </section>
@@ -420,7 +420,7 @@ const AIReply: React.FC = () => {
                       type="checkbox"
                       checked={settings.context_enabled}
                       onChange={event => updateSetting('context_enabled', event.target.checked)}
-                      className="h-5 w-5 shrink-0 accent-yellow-400"
+                      className="h-5 w-5 shrink-0 accent-[var(--brand-active)]"
                     />
                   </label>
                   <label>

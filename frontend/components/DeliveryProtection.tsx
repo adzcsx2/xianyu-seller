@@ -202,7 +202,7 @@ const DeliveryProtection: React.FC<DeliveryProtectionProps> = ({
                         role="switch"
                         aria-checked={rule.enabled}
                         onClick={() => patchRule(rule.rule_code, { enabled: !rule.enabled })}
-                        className={`relative h-6 w-11 rounded-full transition-colors ${rule.enabled ? 'bg-[#ffe100]' : 'bg-gray-300'}`}
+                        className={`relative h-6 w-11 rounded-full transition-colors ${rule.enabled ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
                       >
                         <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${rule.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
                       </button>

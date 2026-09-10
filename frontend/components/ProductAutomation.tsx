@@ -651,7 +651,7 @@ const ProductAutomation: React.FC = () => {
                   onClick={() => setFilterForm({ ...filterForm, enabled: !filterForm.enabled })}
                   className="flex items-center gap-2 text-sm font-bold text-gray-700"
                 >
-                  <span className={`relative h-6 w-11 rounded-full ${filterForm.enabled ? 'bg-yellow-400' : 'bg-gray-300'}`}>
+                  <span className={`relative h-6 w-11 rounded-full ${filterForm.enabled ? 'bg-[var(--brand-active)]' : 'bg-gray-300'}`}>
                     <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${filterForm.enabled ? 'translate-x-5' : ''}`} />
                   </span>
                   启用规则
@@ -691,7 +691,7 @@ const ProductAutomation: React.FC = () => {
                 <div key={rule.id} className="grid gap-4 p-4 lg:grid-cols-[minmax(220px,1.2fr)_minmax(260px,1.5fr)_180px_auto] lg:items-center">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${rule.enabled ? 'bg-[#ffe100]' : 'bg-[#e8dcbc]'}`} />
+                    <span className={`h-2.5 w-2.5 rounded-full ${rule.enabled ? 'bg-[var(--brand)]' : 'bg-[var(--surface-strong)]'}`} />
                     <span className="font-bold text-gray-900">{rule.name}</span>
                   </div>
                   <div className="mt-1 text-xs text-gray-500">{accountNames.get(rule.cookie_id) || rule.cookie_id}</div>
@@ -794,7 +794,7 @@ const ProductAutomation: React.FC = () => {
                     type="checkbox"
                     checked={deleteForm.skip_reply_activity}
                     onChange={(event) => setDeleteForm({ ...deleteForm, skip_reply_activity: event.target.checked })}
-                    className="h-4 w-4 accent-yellow-400"
+                    className="h-4 w-4 accent-[var(--brand-active)]"
                   />
                   排除有自动回复活动的商品
                 </label>
@@ -803,7 +803,7 @@ const ProductAutomation: React.FC = () => {
                     type="checkbox"
                     checked={deleteForm.skip_order_activity}
                     onChange={(event) => setDeleteForm({ ...deleteForm, skip_order_activity: event.target.checked })}
-                    className="h-4 w-4 accent-yellow-400"
+                    className="h-4 w-4 accent-[var(--brand-active)]"
                   />
                   排除有订单记录的商品
                 </label>
