@@ -1,7 +1,7 @@
 {
   "name": "xianyu-seller-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "node -e \"console.error('Standalone frontend server is disabled. Run python Start.py from the project root.'); process.exit(1)\"",
