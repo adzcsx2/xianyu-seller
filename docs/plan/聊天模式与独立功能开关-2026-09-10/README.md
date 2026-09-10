@@ -1,4 +1,4 @@
-# 聊天模式与独立功能开关
+# 聊天模式、独立功能开关与品牌迁移
 
 [执行文档](./00-执行文档.md) · [架构设计](./01-架构设计.md) · [开发规范](./02-开发规范.md) · [修复路线图](./03-修复路线图.md) · [测试计划](./04-测试计划.md) · [测试用例清单](./05-测试用例清单.md)
 
@@ -16,6 +16,8 @@
 - 设置页新增“功能区”，一次原子保存所有功能开关；
 - 保存成功后，后端立即收敛运行任务，前端立即隐藏被关闭的菜单、页面和局部操作；
 - 自动评价、求花、确认收货致谢继续以每个账号现有配置为准。总开关关闭时只阻止执行，不覆盖或删除三个账号级值。
+
+全部功能改动和验收完成后，再执行最终品牌迁移：软件统一命名为“闲鱼卖家”，项目仓库统一指向 [adzcsx2/xianyu-seller](https://github.com/adzcsx2/xianyu-seller)，维护者身份统一为 `adzcsx2`。旧项目名称、旧仓库/镜像标识、旧维护者姓名、官网、邮箱及其托管服务默认值均从当前产品和发布材料移除；根 README 只保留一条“本项目 fork 自直接上游”的来源声明，不再展示上游徽章、作者宣传、fork 网络统计或更早来源链。
 
 ## 2. 推荐聊天模式
 
@@ -58,7 +60,7 @@
 ### 3.1 包含
 
 - 在现有 `system_settings` 上建立强类型功能开关注册表，不新增第二套持久化系统。
-- 新增管理员专用 `GET /feature-flags` 和批量原子 `PUT /feature-flags`。
+- 新增已认证用户可读的 `GET /feature-flags` 和管理员专用的批量原子 `PUT /feature-flags`。
 - 统一返回 configured/effective 状态、依赖关系和前端显示元数据。
 - 动态启动、取消和重启各账号的可选后台任务，不要求重启整个服务。
 - 在消息处理入口阻断订单详情拉取、自动发货、买家互动和自动回复等事件路径。
@@ -67,6 +69,10 @@
 - Sidebar、App 页面渲染和各页面局部动作基于同一份 feature snapshot；处理 localStorage 中已被禁用的旧页面。
 - 保留自动评价、求花、确认收货致谢三个账号级配置及模板，不做清零迁移。
 - 增加数据库、API、运行时、前端合同、构建和回归测试。
+- 在所有功能任务完成后统一更新登录页、导航、移动端标题、About、HTML title、构建产物和测试入口中的产品名为“闲鱼卖家”。
+- 把包名、app-shell、Docker 镜像/容器、GHCR、OCI label、GitHub Actions 和公告 Worker 的第一方标识统一为 `xianyu-seller` / `adzcsx2/xianyu-seller`。
+- 移除旧维护者官网、邮箱、公告源、AI 服务和商品详情服务的硬编码默认绑定；没有用户提供的新服务地址时使用空值/禁用态，不臆造替代域名，并保留用户主动保存的自定义地址。
+- 清理旧 fork 统计资产/工作流/脚本并中性化迁移说明；另设独立任务机械规范化历史文档中的旧身份、本地目录和容器标识；最后基于实际实现从头重写根 `README.md`。
 
 ### 3.2 不包含
 
@@ -76,19 +82,23 @@
 - 不删除被关闭功能的数据、卡密、订单、商品、知识库、模板或账号配置。
 - 不引入新的数据库、消息队列、前端状态库或远程配置服务。
 - 不在计划生成阶段实现代码、构建镜像、部署、push 或创建 PR。
+- 不自动重命名用户本机的工作区目录，不修改 Git 历史或 GitHub 仓库设置；当前 `origin` 已指向目标仓库。
+- 不删除或改写 `LICENSE` 许可证正文、npm 依赖自身的作者/赞助/仓库信息，也不把它们误判成旧项目作者信息。
+- 不凭空新增官网、联系邮箱、公告服务、AI 服务或商品详情服务地址。
 
 ## 4. 事实源与优先级
 
 | 优先级 | 来源 | 稳定章节/符号 | 用途 |
 | ---: | --- | --- | --- |
-| 1 | 本任务用户请求（2026-09-10） | “只需要聊天”“每个功能独立 Boolean”“功能区”“关闭后隐藏”“保留三个账号级配置” | 产品目标与验收最高优先级 |
-| 2 | `XianyuAutoAsync.py` | `init`、`token_refresh_loop`、`handle_message`、各后台 loop、`main` | 当前平台请求、消息事件和任务生命周期事实 |
-| 3 | `app/db_manager.py` | `init_db`、`get/set_system_setting`、买家互动迁移与读写方法 | 持久化和账号级配置事实 |
-| 4 | `app/reply_server.py` | `get/update_system_setting`、聊天/卖家/商品/订单路由 | API、认证和动作边界 |
-| 5 | `app/cookie_manager.py` | `CookieManager.instances`、`ensure_cookie_task`、线程安全调度 | HTTP 线程向账号事件循环应用开关的边界 |
-| 6 | `frontend/App.tsx`、`frontend/components/Sidebar.tsx`、`Settings.tsx`、`frontend/services/api.ts`、`frontend/types.ts` | 静态菜单、页面渲染、设置保存和类型 | 前端隐藏与保存现状 |
-| 7 | `docs/testing/登录开关与人工滑块链路修复.tdd.md`、`docs/testing/MTOP浏览器指纹与人工滑块修复.tdd.md` | RED/GREEN、覆盖边界 | 人工验证、指纹一致性和重复刷新风险回归 |
-| 8 | `AGENT.md`、`CLAUDE.md`、`docs/references/ai-rules/01～03、05` | 架构、测试、API-first、接口目录 | 工程约束 |
+| 1 | 本任务用户请求（2026-09-10） | 聊天模式、独立 Boolean、功能区、关闭后隐藏、保留账号配置，以及最终品牌/仓库/作者/README 要求 | 产品目标与验收最高优先级 |
+| 2 | [目标 GitHub 仓库](https://github.com/adzcsx2/xianyu-seller) | 仓库标题、owner/repository、fork 关系 | 目标仓库与唯一上游来源事实 |
+| 3 | `XianyuAutoAsync.py` | `init`、`token_refresh_loop`、`handle_message`、各后台 loop、`main` | 当前平台请求、消息事件和任务生命周期事实 |
+| 4 | `app/db_manager.py` | `init_db`、`get/set_system_setting`、买家互动迁移与读写方法 | 持久化和账号级配置事实 |
+| 5 | `app/reply_server.py` | `get/update_system_setting`、聊天/卖家/商品/订单路由 | API、认证和动作边界 |
+| 6 | `app/cookie_manager.py` | `CookieManager.instances`、`ensure_cookie_task`、线程安全调度 | HTTP 线程向账号事件循环应用开关的边界 |
+| 7 | 根 `README.md`、`frontend/App.tsx`、`Sidebar.tsx`、`About.tsx`、HTML 壳、Docker/Compose、工作流、公告与包元数据 | 当前名称、外链、作者、镜像和分发标识 | Phase 5 品牌盘点事实 |
+| 8 | `docs/testing/登录开关与人工滑块链路修复.tdd.md`、`docs/testing/MTOP浏览器指纹与人工滑块修复.tdd.md` | RED/GREEN、覆盖边界 | 人工验证、指纹一致性和重复刷新风险回归 |
+| 9 | `AGENT.md`、`CLAUDE.md`、`docs/references/ai-rules/01～03、05` | 架构、测试、API-first、接口目录 | 工程约束 |
 
 接口索引因工作区中 `app/reply_server.py` 已有用户改动而 stale；计划生成时已重建到临时文件核验，未覆盖仓库索引。实施阶段应在代码稳定后正式重建接口索引和目录。
 
@@ -114,10 +124,13 @@
 - 买家互动总开关关闭时，评价、求花、致谢均不执行，三个账号级值和模板原样保留；重新打开总开关后按原值恢复。
 - 关闭只是可见性与执行门禁，不删除业务数据。
 - 定向测试、核心回归、前端生产构建、API 索引一致性、`git diff --check` 和聊天模式人工验收全部通过。
+- 所有用户可见位置只显示“闲鱼卖家”；第一方机器标识统一为 `xianyu-seller`，仓库/镜像链接统一指向 `adzcsx2/xianyu-seller`，作者/维护者统一为 `adzcsx2`。
+- 根 README 在最后一步重写并准确反映最终功能、聊天模式配置、部署、安全和风控边界；直接上游只出现于唯一 fork 声明。
+- 旧维护者品牌、联系信息、服务默认值和 fork 统计材料通过自动扫描证明无残留；许可证正文、依赖元数据和 Git 历史保持原样。
 
 ## 7. 当前工作区保护
 
-生成本计划时工作区已有以下未提交修改，均不属于本计划生成内容：
+初次生成本计划时，以下四个路径含用户已有改动；品牌需求增补时它们已进入当前历史，当前未提交变更只在本计划目录，但这些内容仍属于受保护基线：
 
 - `app/reply_server.py`
 - `frontend/components/AccountList.tsx`
@@ -128,4 +141,4 @@
 
 ## 8. 生成后审计
 
-最终结果：`PASS`。七份文档已完成一次需求追踪与鲁棒性审计，并执行了规定的一次修复；证据见 [00-执行文档](./00-执行文档.md#生成后对齐与鲁棒性审计)。
+最终结果：`PASS`。七份文档已针对新增品牌需求重新完成一次需求追踪与鲁棒性审计；证据见 [00-执行文档](./00-执行文档.md#生成后对齐与鲁棒性审计)。
