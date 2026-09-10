@@ -10,6 +10,12 @@ from urllib.parse import urlsplit
 import requests
 
 
+# The hosted runtime maps public DNS answers into this non-routable range
+# before sending HTTPS traffic through its egress layer.  It is only trusted
+# for DNS hostnames; literal IP URLs remain subject to the SSRF checks below.
+_PUBLIC_DNS_MAPPING_NETWORK = ipaddress.ip_network("198.18.0.0/15")
+
+
 def extract_model_ids(payload: Any) -> list[str]:
     """Extract unique model IDs from a standard OpenAI models response."""
     if not isinstance(payload, dict):
@@ -78,10 +84,12 @@ def validate_model_service_url(
     if allow_private_hosts:
         return normalized_base_url
 
+    hostname_is_literal = False
     try:
         addresses = {
             ipaddress.ip_address(parsed.hostname).compressed,
         }
+        hostname_is_literal = True
     except ValueError:
         try:
             addresses = {
@@ -97,6 +105,9 @@ def validate_model_service_url(
 
     for address in addresses:
         ip = ipaddress.ip_address(address)
+        is_runtime_dns_mapping = (
+            not hostname_is_literal and ip in _PUBLIC_DNS_MAPPING_NETWORK
+        )
         if (
             ip.is_private
             or ip.is_loopback
@@ -104,7 +115,7 @@ def validate_model_service_url(
             or ip.is_reserved
             or ip.is_multicast
             or ip.is_unspecified
-        ):
+        ) and not is_runtime_dns_mapping:
             raise ValueError("模型服务地址不允许指向内网或本机")
 
     return normalized_base_url

@@ -63,6 +63,27 @@ class AIModelListingTests(unittest.TestCase):
                 fetch_available_models("http://127.0.0.1:8000/v1", "secret-key")
         request.assert_not_called()
 
+    def test_public_dns_mapping_range_is_allowed_for_external_model_service(self):
+        response = Mock()
+        response.json.return_value = {"data": [{"id": "deepseek-flash"}]}
+        response.raise_for_status.return_value = None
+
+        with (
+            patch("app.ai_models.socket.getaddrinfo", return_value=[
+                (2, 1, 6, "", ("198.18.39.6", 443)),
+            ]),
+            patch("app.ai_models.requests.get", return_value=response) as request,
+        ):
+            result = fetch_available_models("https://api.deepseek.com", "secret-key")
+
+        self.assertEqual(result, ["deepseek-flash"])
+        request.assert_called_once_with(
+            "https://api.deepseek.com/models",
+            headers={"Authorization": "Bearer secret-key"},
+            timeout=15,
+            allow_redirects=False,
+        )
+
     def test_non_http_model_service_url_is_rejected_without_network_call(self):
         with patch("app.ai_models.requests.get") as request:
             with self.assertRaises(ValueError):
