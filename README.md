@@ -78,6 +78,25 @@ python scripts/run_tests.py --suite e2e --database snapshot
 python scripts/run_tests.py --suite all --coverage --quality --database snapshot
 ```
 
+## 文档导航
+
+| 文档 | 内容 |
+| --- | --- |
+| [文档索引](docs/README.md) | 按指南、模块、参考、计划和报告浏览全部文档 |
+| [项目概览](docs/guide/PROJECT_OVERVIEW.md) | 运行入口、目录结构和核心边界 |
+| [架构说明](docs/modules/ARCHITECTURE.md) | 后端、前端、任务和数据流 |
+| [接口参考](docs/references/API.md) | 认证、功能开关、AI 模型和健康检查接口 |
+| [部署与排查](docs/deployment.md) | Docker、滑块验证、更新和故障排查 |
+| [自动化测试指南](docs/guide/自动化测试指南.md) | 测试套件、数据库隔离和质量门禁 |
+
+### 最近更新
+
+| 日期 | 描述 |
+| --- | --- |
+| 2026-09-10 | 补充项目总览、架构、接口、依赖和文档索引，并记录 AI 服务安全边界。 |
+
+> 查看全部更新：[文档更新日志](docs/reports/CHANGELOG.md)
+
 问题反馈和版本信息请使用 [Issues](https://github.com/adzcsx2/xianyu-seller/issues) 与 [Releases](https://github.com/adzcsx2/xianyu-seller/releases)。
 
 ## 许可证

@@ -1,0 +1,48 @@
+# 界面与功能开关
+
+## 页面入口
+
+前端由 `frontend/App.tsx` 装配，侧边栏由 `frontend/components/Sidebar.tsx` 提供。以下页面始终可见：仪表盘、账号、消息、通知与日志、系统设置、关于。
+
+| 页面 ID | 页面 | 主要职责 | 受控开关示例 |
+| --- | --- | --- | --- |
+| `items` | 商品与发货 | 商品同步、详情、发货配置 | `feature_items_enabled`、`item_sync_enabled`、`auto_delivery_enabled` |
+| `orders` | 订单管理 | 订单同步、状态、手动发货 | `feature_orders_enabled`、`order_sync_enabled` |
+| `buyer-interaction` | 买家互动 | 评价、求花、确认收货致谢 | `feature_buyer_interaction_enabled` |
+| `cards` | 卡密库存 | 分组、库存和导入 | `feature_cards_enabled` |
+| `auto-reply` | 自动回复 | 关键词与规则回复 | `feature_auto_reply_enabled` |
+| `ai-reply` | AI 回复 | AI 配置、测试和自动回复 | `feature_ai_reply_enabled` |
+| `knowledge-base` | 知识库 | 知识库 CRUD、绑定和预览 | `feature_knowledge_base_enabled` |
+| `product-automation` | 商品自动化 | 素材、筛选、删除和修复任务 | `feature_product_automation_enabled` |
+
+## 可见性与执行语义
+
+`frontend/contexts/FeatureFlagsContext.tsx` 拉取后端快照，`frontend/lib/featureRegistry.ts` 只保存页面和控件归属，不复制后端默认值。页面进入和侧边栏展示都使用 `effective` 状态；页面在开关关闭后会回退到仪表盘。
+
+关闭功能的完整语义由后端保证：
+
+- 页面入口隐藏；
+- 对应写操作或后台任务返回稳定的 `409 feature_disabled`；
+- 原有配置、商品、订单、卡密、知识库和日志保留；
+- 重新开启后，仍保留的配置可以继续使用。
+
+## 高风险交互
+
+- 账号登录、扫码、人工滑块和 Cookie/Token 恢复会接触真实账号状态。
+- 自动回复、AI 回复、自动发货、商品自动化和订单手动发货会触发外部或业务动作。
+- 管理员设置包含登录、注册、SMTP、AI、备份和功能开关；前端展示不替代后端权限校验。
+- API Key、密码、Cookie、验证码、聊天/订单数据和卡密只允许在本地运行时使用，不得放入截图、测试 fixture 或文档。
+
+## 典型用户旅程
+
+```text
+登录 → 账号连接 → 商品/订单同步 → 配置规则与知识库
+     → 开启需要的后台任务 → 消息/订单触发动作 → 通知与日志核对
+```
+
+## 前端与 API 的兼容约束
+
+- `frontend/services/api.ts` 是前端 API 调用集中入口；修改后端响应字段时要同步类型和页面状态处理。
+- `/feature-flags` 的 revision 冲突必须提示用户刷新快照，不应静默覆盖其他管理员的修改。
+- AI 模型下拉框只展示模型 ID；普通账号响应不能依赖 API Key 原文。
+- 生产页面来自 `static/`，前端变更完成后必须重新构建并通过 detached build 检查。
