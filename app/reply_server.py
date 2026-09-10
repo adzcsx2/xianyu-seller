@@ -4216,6 +4216,9 @@ def get_ai_models(
     from app.db_manager import db_manager
 
     try:
+        if not cookie_id and not current_user.get('is_admin'):
+            raise HTTPException(status_code=403, detail='只有管理员可以获取系统模型列表')
+
         if cookie_id:
             if cookie_id not in db_manager.get_all_cookies(current_user['user_id']):
                 raise HTTPException(status_code=403, detail='无权限访问该账号')
@@ -4231,6 +4234,7 @@ def get_ai_models(
         models = fetch_available_models(
             settings.get('ai_api_url', ''),
             settings.get('ai_api_key', ''),
+            allow_private_hosts=bool(current_user.get('is_admin')),
         )
         return {
             'models': models,
@@ -6719,7 +6723,7 @@ class AIReplySettings(BaseModel):
     context_expire_minutes: int = 120
 
 
-def _public_ai_reply_settings(settings: dict) -> dict:
+def _public_ai_reply_settings(settings: dict, *, reveal_api_key: bool = False) -> dict:
     """返回前端可展示的 AI 配置。"""
     from app.ai_config import get_env_ai_config
 
@@ -6740,8 +6744,8 @@ def _public_ai_reply_settings(settings: dict) -> dict:
     }
     public_settings['api_key_configured'] = account_api_key_configured
     public_settings['api_key_source'] = 'env' if using_env_api_key else 'account'
-    # 账号级密钥继续只返回“已配置”状态，不把账号密钥原文回传到前端。
-    if not using_env_api_key:
+    # 普通账号接口只返回密钥状态；管理员可以在受保护的管理界面查看部署级密钥。
+    if not reveal_api_key:
         public_settings['api_key'] = ''
     return public_settings
 
@@ -6793,7 +6797,10 @@ def get_ai_reply_settings(cookie_id: str, current_user: Dict[str, Any] = Depends
             raise HTTPException(status_code=403, detail="无权限访问该Cookie")
 
         settings = db_manager.get_ai_reply_settings(cookie_id)
-        return _public_ai_reply_settings(settings)
+        return _public_ai_reply_settings(
+            settings,
+            reveal_api_key=bool(current_user.get('is_admin')),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -6863,7 +6870,10 @@ def get_all_ai_reply_settings(current_user: Dict[str, Any] = Depends(get_current
         user_cookies = db_manager.get_all_cookies(user_id)
 
         user_settings = {
-            cid: _public_ai_reply_settings(db_manager.get_ai_reply_settings(cid))
+            cid: _public_ai_reply_settings(
+                db_manager.get_ai_reply_settings(cid),
+                reveal_api_key=bool(current_user.get('is_admin')),
+            )
             for cid in user_cookies
         }
         return user_settings

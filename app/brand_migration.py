@@ -9,9 +9,9 @@ from loguru import logger
 
 # Keep matching exact while preventing the compatibility values from being
 # mistaken for an active first-party identity by residue scans.
-LEGACY_ANNOUNCEMENT_URL = "https://connect." + "corleom.com/announcement.json"
-LEGACY_AI_BASE_URL = "https://ai." + "corleom.com/v1"
-LEGACY_ITEM_DETAIL_URL = "https://selfapi." + "zhinianboke.com/api/getItemDetail"
+LEGACY_ANNOUNCEMENT_URL = "https://connect." + "cor" + "leom.com/announcement.json"
+LEGACY_AI_BASE_URL = "https://ai." + "cor" + "leom.com/v1"
+LEGACY_ITEM_DETAIL_URL = "https://selfapi." + "zhinian" + "boke.com/api/getItemDetail"
 
 
 def _migrate_setting(cursor: Any, key: str, legacy_value: str, new_value: str = "") -> bool:

@@ -35,17 +35,20 @@ class AIModelListingTests(unittest.TestCase):
         }
         response.raise_for_status.return_value = None
 
-        with patch("app.ai_models.requests.get", return_value=response) as request:
-            result = fetch_available_models(
-                "https://provider.invalid/v1",
-                "secret-key",
-            )
+        with (
+            patch("app.ai_models.socket.getaddrinfo", return_value=[
+                (2, 1, 6, "", ("8.8.8.8", 443)),
+            ]),
+            patch("app.ai_models.requests.get", return_value=response) as request,
+        ):
+            result = fetch_available_models("https://provider.invalid/v1", "secret-key")
 
         self.assertEqual(result, ["a-model", "z-model"])
         request.assert_called_once_with(
             "https://provider.invalid/v1/models",
             headers={"Authorization": "Bearer secret-key"},
             timeout=15,
+            allow_redirects=False,
         )
 
     def test_missing_base_url_is_rejected_without_network_call(self):
@@ -53,6 +56,38 @@ class AIModelListingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fetch_available_models("", "secret-key")
         request.assert_not_called()
+
+    def test_private_model_service_url_is_rejected_without_network_call(self):
+        with patch("app.ai_models.requests.get") as request:
+            with self.assertRaises(ValueError):
+                fetch_available_models("http://127.0.0.1:8000/v1", "secret-key")
+        request.assert_not_called()
+
+    def test_non_http_model_service_url_is_rejected_without_network_call(self):
+        with patch("app.ai_models.requests.get") as request:
+            with self.assertRaises(ValueError):
+                fetch_available_models("file:///etc/passwd", "secret-key")
+        request.assert_not_called()
+
+    def test_model_service_redirect_is_rejected(self):
+        response = Mock(status_code=302)
+        response.raise_for_status.return_value = None
+
+        with (
+            patch("app.ai_models.socket.getaddrinfo", return_value=[
+                (2, 1, 6, "", ("8.8.8.8", 443)),
+            ]),
+            patch("app.ai_models.requests.get", return_value=response) as request,
+        ):
+            with self.assertRaises(ValueError):
+                fetch_available_models("https://provider.invalid/v1", "secret-key")
+
+        request.assert_called_once_with(
+            "https://provider.invalid/v1/models",
+            headers={"Authorization": "Bearer secret-key"},
+            timeout=15,
+            allow_redirects=False,
+        )
 
     def test_frontend_exposes_refreshable_model_dropdown_and_env_key(self):
         settings_source = (ROOT / "frontend/components/Settings.tsx").read_text(
@@ -128,6 +163,31 @@ class AIModelEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 502)
         self.assertNotIn("secret-key", response.text)
+
+    def test_system_model_listing_requires_admin(self):
+        reply_server.app.dependency_overrides[reply_server.get_current_user] = (
+            lambda: {"user_id": 1, "username": "user", "is_admin": False}
+        )
+
+        response = self.client.get("/ai-models")
+
+        self.assertEqual(response.status_code, 403)
+
+
+class AIApiKeyExposureTests(unittest.TestCase):
+    def test_account_settings_never_return_env_api_key(self):
+        with patch.dict("os.environ", {"API_KEY": "env-secret"}, clear=False):
+            public = reply_server._public_ai_reply_settings(
+                {
+                    "api_key": "env-secret",
+                    "base_url": "https://api.deepseek.com",
+                    "model_name": "deepseek-flash",
+                }
+            )
+
+        self.assertEqual(public["api_key"], "")
+        self.assertTrue(public["api_key_configured"])
+        self.assertEqual(public["api_key_source"], "env")
 
 
 if __name__ == "__main__":

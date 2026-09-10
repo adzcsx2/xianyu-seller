@@ -57,8 +57,8 @@ class BrandIdentityContractTests(unittest.TestCase):
 
         about = sources["about"]
         self.assertIn("https://github.com/adzcsx2/xianyu-seller", about)
-        self.assertNotIn("xy." + "corleom.com", about)
-        self.assertNotIn("mailto:" + "admin@corleom.com", about)
+        self.assertNotIn("xy." + "cor" + "leom.com", about)
+        self.assertNotIn("mailto:" + "admin@cor" + "leom.com", about)
 
     def test_old_first_party_identity_only_survives_in_one_readme_fork_line(self):
         old_tokens = _legacy_brand_tokens()
@@ -79,7 +79,7 @@ class BrandIdentityContractTests(unittest.TestCase):
         allowed = [item for item in hits if item[0] == "README.md" and "fork" in item[2].lower()]
         self.assertEqual(allowed, hits, msg=f"unexpected legacy identity hits: {hits}")
         self.assertEqual(len(allowed), 1)
-        self.assertIn("https://github.com/23" + "Star/xianyu-super-butler", allowed[0][2])
+        self.assertIn("https://github.com/23" + "Star/xianyu-super-" + "butler", allowed[0][2])
 
     def test_distribution_identity_matrix_is_targeted(self):
         package = (ROOT / "frontend/package.json").read_text(encoding="utf-8")

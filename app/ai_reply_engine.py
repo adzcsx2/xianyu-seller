@@ -20,6 +20,7 @@ from loguru import logger
 from openai import OpenAI
 import app.product_knowledge as product_knowledge_module
 from app.db_manager import db_manager
+from app.ai_models import validate_model_service_url
 from app.product_knowledge import (
     HUMAN_CONFIRMATION_REPLY,
     ProductKnowledgeService,
@@ -83,6 +84,7 @@ class AIReplyEngine:
             return None
         
         try:
+            validate_model_service_url(settings.get('base_url', ''))
             logger.info(f"创建新的OpenAI客户端实例 {cookie_id}: base_url={settings['base_url']}, api_key={'***' + settings['api_key'][-4:] if settings['api_key'] else 'None'}")
             client = OpenAI(
                 api_key=settings['api_key'],

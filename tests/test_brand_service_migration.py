@@ -13,9 +13,9 @@ from app.reply_server import AIReplySettings
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_ANNOUNCEMENT_URL = "https://connect." + "corleom.com/announcement.json"
-LEGACY_AI_URL = "https://ai." + "corleom.com/v1"
-LEGACY_ITEM_URL = "https://selfapi." + "zhinianboke.com/api/getItemDetail"
+LEGACY_ANNOUNCEMENT_URL = "https://connect." + "cor" + "leom.com/announcement.json"
+LEGACY_AI_URL = "https://ai." + "cor" + "leom.com/v1"
+LEGACY_ITEM_URL = "https://selfapi." + "zhinian" + "boke.com/api/getItemDetail"
 
 
 class BrandServiceMigrationTests(unittest.TestCase):

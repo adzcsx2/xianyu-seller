@@ -523,13 +523,13 @@ class AIReplyEngineTests(unittest.TestCase):
         self.assertEqual(result["api_key"], "")
         self.assertTrue(result["api_key_configured"])
 
-    def test_public_settings_return_deployment_api_key_for_configuration_screen(self):
+    def test_admin_settings_can_return_deployment_api_key(self):
         with patch.dict(os.environ, {"API_KEY": "env-key"}):
             result = _public_ai_reply_settings({
                 "ai_enabled": True,
                 "api_key": "env-key",
                 "model_name": "test-model",
-            })
+            }, reveal_api_key=True)
 
         self.assertEqual(result["api_key"], "env-key")
         self.assertEqual(result["api_key_source"], "env")
