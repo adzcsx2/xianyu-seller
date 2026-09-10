@@ -589,6 +589,23 @@ class AIReplyTestRouteTests(unittest.TestCase):
         )
         self.assertEqual(extra.status_code, 422)
 
+    def test_ai_test_reports_upstream_failure_as_bad_gateway(self):
+        with patch.object(
+            self.reply_server.ai_reply_engine,
+            "generate_reply_async",
+            return_value=None,
+        ):
+            response = self.client.post(
+                "/ai-reply-test/account-a",
+                json={"message": "你好", "item_id": "item-1"},
+            )
+
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertEqual(
+            response.json()["detail"],
+            "AI 服务未返回有效回复，请检查模型地址、模型名称和 API Key",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

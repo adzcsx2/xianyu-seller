@@ -153,6 +153,7 @@ class AIEnvironmentPriorityTests(unittest.TestCase):
     def test_settings_surface_displays_env_values_and_does_not_save_metadata(self):
         settings_source = (ROOT / "frontend/components/Settings.tsx").read_text(encoding="utf-8")
         api_source = (ROOT / "frontend/services/api.ts").read_text(encoding="utf-8")
+        request_source = (ROOT / "frontend/lib/request.ts").read_text(encoding="utf-8")
 
         self.assertIn("settings.ai_env_overrides?.api_key", settings_source)
         self.assertIn("settings.ai_env_overrides?.base_url", settings_source)
@@ -162,6 +163,8 @@ class AIEnvironmentPriorityTests(unittest.TestCase):
         self.assertNotIn("disabled={Boolean(settings.ai_env_overrides", settings_source)
         ai_reply_source = (ROOT / "frontend/components/AIReply.tsx").read_text(encoding="utf-8")
         self.assertNotIn("disabled={Boolean(settings.ai_env_overrides", ai_reply_source)
+        self.assertIn("responseData?.detail", request_source)
+        self.assertIn("error.message =", request_source)
 
 
 if __name__ == "__main__":
