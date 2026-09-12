@@ -17,7 +17,7 @@ from app.config import (
     WEBSOCKET_URL, HEARTBEAT_INTERVAL, HEARTBEAT_TIMEOUT,
     TOKEN_REFRESH_INTERVAL, TOKEN_RETRY_INTERVAL, COOKIES_STR,
     LOG_CONFIG, AUTO_REPLY, DEFAULT_HEADERS, WEBSOCKET_HEADERS,
-    APP_CONFIG, API_ENDPOINTS
+    APP_CONFIG, API_ENDPOINTS, SLIDER_VERIFICATION
 )
 from app.config import config as cfg  # 导入config实例（不是模块），使用别名避免冲突
 import sys
@@ -29,8 +29,32 @@ from app.specification import combine_legacy_specification
 from utils.log_sanitizer import redact_log_record, redact_sensitive_text
 from utils.mtop_browser_fingerprint import build_mtop_request_headers
 
-# 滑块验证补丁已废弃，使用集成的 Playwright 登录方法
-# 不再需要猴子补丁，所有功能已集成到 XianyuSliderStealth 类中
+
+class _LegacySliderConfig:
+    """Compatibility object for the local solver when slidex is unavailable."""
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+def _load_token_refresh_slider_runtime():
+    """Prefer the reference project's slidex runtime, with local parity fallback."""
+    try:
+        from slidex import SlidexConfig, SliderSolver
+        return SlidexConfig, SliderSolver, "slidex"
+    except ModuleNotFoundError as exc:
+        if exc.name != "slidex":
+            raise
+        from utils.slider_solver import SliderSolver
+        return _LegacySliderConfig, SliderSolver, "local"
+
+
+def _create_token_refresh_slider(slider_cls, **kwargs):
+    try:
+        return slider_cls(**kwargs)
+    except TypeError:
+        kwargs.pop("config", None)
+        return slider_cls(**kwargs)
 
 class ConnectionState(Enum):
     """WebSocket连接状态枚举"""
@@ -2714,235 +2738,102 @@ class XianyuLive:
             return False
 
     async def _handle_captcha_verification(self, res_json: dict) -> str:
-        """处理滑块验证，返回新的cookies字符串"""
+        """Run the reference slider pipeline and persist only a strict x5 success."""
         try:
-            logger.info(f"【{self.cookie_id}】开始处理滑块验证...")
-
-            # 获取验证URL
-            verification_url = None
-
-            # 从data字段获取URL
-            data = res_json.get('data', {})
-            if isinstance(data, dict) and 'url' in data:
-                verification_url = data.get('url')
-
-            # 如果没有找到URL，使用默认的验证页面
+            logger.info(f"【{self.cookie_id}】开始处理滑块验证（reference pipeline）...")
+            data = res_json.get("data", {}) if isinstance(res_json, dict) else {}
+            verification_url = data.get("url") if isinstance(data, dict) else None
             if not verification_url:
-                logger.info(f"【{self.cookie_id}】未找到验证URL，认为不需要滑块验证，返回正常")
+                logger.info(f"【{self.cookie_id}】未找到验证URL，跳过滑块验证")
                 return None
 
-            logger.info(f"【{self.cookie_id}】验证URL: {verification_url}")
+            from utils.slider_orchestrator import run_slider_async_with_fallback
 
-            # 使用滑块验证器（独立实例，解决并发冲突）
-            try:
-                # 使用集成的滑块验证方法（无需猴子补丁）
-                from utils.xianyu_slider_stealth import XianyuSliderStealth
-                logger.info(f"【{self.cookie_id}】XianyuSliderStealth导入成功，使用滑块验证")
+            slider_config_cls, slider_cls, runtime = _load_token_refresh_slider_runtime()
+            config = slider_config_cls(
+                max_concurrent=SLIDER_VERIFICATION.get("max_concurrent", 3),
+                wait_timeout=SLIDER_VERIFICATION.get("wait_timeout", 60),
+            )
+            solver = _create_token_refresh_slider(
+                slider_cls,
+                cookie_id=self.cookie_id,
+                user_id=self.cookie_id,
+                cookies_str=self.cookies_str,
+                initial_cookies=self.cookies_str,
+                headless=os.getenv("SLIDER_HEADLESS", "true").lower() == "true",
+                proxy=getattr(self, "proxy_config", None),
+                config=config,
+            )
+            logger.info(f"【{self.cookie_id}】滑块引擎已加载: {runtime}")
+            result = await run_slider_async_with_fallback(
+                solver,
+                verification_url,
+                engine=runtime,
+            )
+            logger.info(
+                f"【{self.cookie_id}】SLIDER_RESULT success={result.success} "
+                f"engine={result.engine} x5_keys={sorted(result.x5_cookies)} "
+                f"message={result.message}"
+            )
 
-                # 创建独立的滑块验证实例（每个用户独立实例，避免并发冲突）
-                # headless 必须为 False：实测同一账号、同一轨迹下，
-                # 无头 0/2 通过，有头 1/3 通过且平台确认解除风控。
-                # Chrome 无头的 WebGL 渲染器、字体列表、navigator.plugins、
-                # 屏幕参数与有头差异巨大，会被阿里 nc 直接识破。
-                # 服务器无显示器时用 Xvfb 提供虚拟显示：
-                #   xvfb-run -a --server-args="-screen 0 1920x1080x24" python Start.py
-                slider_headless = os.getenv('SLIDER_HEADLESS', 'false').lower() == 'true'
-                slider_stealth = XianyuSliderStealth(
-                    user_id=f"{self.cookie_id}",
-                    enable_learning=True,  # 启用学习功能
-                    headless=slider_headless
+            if not result.success or not result.cookies:
+                log_captcha_event(
+                    self.cookie_id,
+                    "滑块验证失败",
+                    False,
+                    f"engine={result.engine}; {result.message}",
                 )
-
-                # 在线程池中执行滑块验证
-                import asyncio
-                import concurrent.futures
-
-                loop = asyncio.get_event_loop()
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    # 执行滑块验证。必须把账号 Cookie 一并传入 ——
-                    # 惩罚页的 x5secdata 绑定账号会话，不带 Cookie 时即使滑块拖过，
-                    # 回收到的也只是空浏览器凭证，风控不会解除。
-                    success, cookies = await loop.run_in_executor(
-                        executor,
-                        slider_stealth.run,
-                        verification_url,
-                        self.cookies_str
-                    )
-
-                if success and cookies:
-                    # 边界防御：只有 x5sec 才是通行凭证。x5secdata / x5sectag 是挑战
-                    # 标记，必然存在，不能拿它们当验证通过的证据 —— 否则会把一堆
-                    # 挑战 cookie 写回账号，token 刷新永远 FAIL_SYS_USER_VALIDATE。
-                    if 'x5sec' not in {k.lower() for k in cookies}:
-                        logger.error(
-                            f"【{self.cookie_id}】滑块返回的 cookie 中没有 x5sec，"
-                            f"视觉通过但服务端未放行，按失败处理。"
-                            f"已有key: {list(cookies.keys())}"
-                        )
-                        success = False
-                        cookies = None
-
-                if success and cookies:
-                    logger.info(f"【{self.cookie_id}】滑块验证成功，获取到新的cookies")
-
-                    # 只提取x5sec相关的cookie值进行更新
-                    updated_cookies = self.cookies.copy()  # 复制现有cookies
-                    new_cookie_count = 0
-                    updated_cookie_count = 0
-                    x5sec_cookies = {}
-
-                    # 筛选出x5相关的cookies（包括x5sec, x5step等）
-                    for cookie_name, cookie_value in cookies.items():
-                        cookie_name_lower = cookie_name.lower()
-                        if cookie_name_lower.startswith('x5') or 'x5sec' in cookie_name_lower:
-                            x5sec_cookies[cookie_name] = cookie_value
-
-                    logger.info(f"【{self.cookie_id}】找到{len(x5sec_cookies)}个x5相关cookies: {list(x5sec_cookies.keys())}")
-
-                    # 只更新x5相关的cookies
-                    for cookie_name, cookie_value in x5sec_cookies.items():
-                        if cookie_name in updated_cookies:
-                            if updated_cookies[cookie_name] != cookie_value:
-                                logger.warning(f"【{self.cookie_id}】更新x5 cookie: {cookie_name}")
-                                updated_cookies[cookie_name] = cookie_value
-                                updated_cookie_count += 1
-                            else:
-                                logger.warning(f"【{self.cookie_id}】x5 cookie值未变: {cookie_name}")
-                        else:
-                            logger.warning(f"【{self.cookie_id}】新增x5 cookie: {cookie_name}")
-                            updated_cookies[cookie_name] = cookie_value
-                            new_cookie_count += 1
-
-                    # 拿到 x5sec 就必须清掉挑战标记。x5secdata / x5sectag 表示"这个请求
-                    # 还有一道未完成的人机验证"，而 x5sec 才是通过凭证。
-                    # 原来只做新增和覆盖、从不删除，于是滑块过了以后 Cookie 里
-                    # x5sec 和旧的 x5secdata 同时存在 —— 闲鱼据此认为挑战仍未完成，
-                    # 继续返回 FAIL_SYS_USER_VALIDATE，表现为"滑块过了却一直用不了"。
-                    if 'x5sec' in {k.lower() for k in x5sec_cookies}:
-                        for stale in CAPTCHA_CHALLENGE_COOKIES:
-                            for name in [k for k in updated_cookies if k.lower() == stale]:
-                                # 本次滑块响应又下发了同名值时以新值为准，不要删
-                                if name not in x5sec_cookies:
-                                    updated_cookies.pop(name, None)
-                                    logger.warning(
-                                        f"【{self.cookie_id}】已清除过期的验证挑战标记: {name}"
-                                    )
-
-                    # 将合并后的cookies字典转换为字符串格式
-                    cookies_str = "; ".join([f"{k}={v}" for k, v in updated_cookies.items()])
-
-                    logger.info(f"【{self.cookie_id}】x5 Cookie更新完成: 新增{new_cookie_count}个, 更新{updated_cookie_count}个, 总计{len(updated_cookies)}个")
-
-                    # 自动更新数据库中的cookie
-                    try:
-                        # 备份原有cookies
-                        old_cookies_str = self.cookies_str
-                        old_cookies_dict = self.cookies.copy()
-
-                        # 更新当前实例的cookies（使用合并后的cookies）
-                        self.cookies_str = cookies_str
-                        self.cookies = updated_cookies
-
-                        # 更新数据库中的cookies
-                        await self.update_config_cookies()
-                        logger.info(f"【{self.cookie_id}】滑块验证成功后，数据库cookies已自动更新")
-
-                            
-                        log_captcha_event(self.cookie_id, "滑块验证成功并自动更新数据库", True,
-                            f"cookies长度: {len(cookies_str)}, 新增{new_cookie_count}个x5, 更新{updated_cookie_count}个x5, 总计{len(updated_cookies)}个cookie项, x5字段: {sorted(x5sec_cookies.keys())}")
-
-                        # 发送成功通知
-                        await self.send_token_refresh_notification(
-                            f"滑块验证成功，cookies已自动更新到数据库",
-                            "captcha_success_auto_update"
-                        )
-
-                    except Exception as update_e:
-                        logger.error(f"【{self.cookie_id}】自动更新数据库cookies失败: {self._safe_str(update_e)}")
-
-                        # 回滚cookies
-                        self.cookies_str = old_cookies_str
-                        self.cookies = old_cookies_dict
-
-                        log_captcha_event(self.cookie_id, "滑块验证成功但数据库更新失败", False,
-                            f"更新异常: {self._safe_str(update_e)[:100]}, x5字段: {sorted(x5sec_cookies.keys())}")
-
-                        # 发送更新失败通知
-                        await self.send_token_refresh_notification(
-                            f"滑块验证成功但数据库更新失败: {self._safe_str(update_e)}",
-                            "captcha_success_db_update_failed"
-                        )
-
-                    return cookies_str
-                else:
-                    logger.error(f"【{self.cookie_id}】滑块验证失败")
-
-                    # 记录滑块验证失败到日志文件
-                    log_captcha_event(self.cookie_id, "滑块验证失败", False,
-                        f"XianyuSliderStealth执行失败, 环境: {'Docker' if os.getenv('DOCKER_ENV') else '本地'}")
-
-                    # 发送通知（检查WebSocket连接状态）
-                    # 只有在WebSocket未连接时才发送通知，已连接说明可能是暂时性问题
-                    is_ws_connected = (
-                        self.connection_state == ConnectionState.CONNECTED and 
-                        self.ws and 
-                        not self.ws.closed
-                    )
-                    
-                    if is_ws_connected:
-                        logger.info(f"【{self.cookie_id}】WebSocket连接正常，滑块验证失败可能是暂时的，跳过通知")
-                    else:
-                        logger.warning(f"【{self.cookie_id}】WebSocket未连接，发送滑块验证失败通知")
-                        await self.send_token_refresh_notification(
-                            f"滑块验证失败，需要手动处理。验证URL: {verification_url}",
-                            "captcha_verification_failed"
-                        )
-                    return None
-
-            except ImportError as import_e:
-                logger.error(f"【{self.cookie_id}】XianyuSliderStealth导入失败: {import_e}")
-                logger.error(f"【{self.cookie_id}】请安装Playwright库: pip install playwright")
-
-                # 记录导入失败到日志文件
-                log_captcha_event(self.cookie_id, "XianyuSliderStealth导入失败", False,
-                    f"Playwright未安装, 错误: {import_e}")
-
-                # 发送通知
-                await self.send_token_refresh_notification(
-                    f"滑块验证功能不可用，请安装Playwright。验证URL: {verification_url}",
-                    "captcha_dependency_missing"
-                )
-                return None
-
-            except Exception as stealth_e:
-                logger.error(f"【{self.cookie_id}】滑块验证异常: {self._safe_str(stealth_e)}")
-
-                # 记录异常到日志文件
-                log_captcha_event(self.cookie_id, "滑块验证异常", False,
-                    f"执行异常, 错误: {self._safe_str(stealth_e)[:100]}")
-
-                # 发送通知（检查WebSocket连接状态）
-                # 只有在WebSocket未连接时才发送通知，已连接说明可能是暂时性问题
-                is_ws_connected = (
-                    self.connection_state == ConnectionState.CONNECTED and 
-                    self.ws and 
-                    not self.ws.closed
-                )
-                
-                if is_ws_connected:
-                    logger.info(f"【{self.cookie_id}】WebSocket连接正常，滑块验证执行异常可能是暂时的，跳过通知")
-                else:
-                    logger.warning(f"【{self.cookie_id}】WebSocket未连接，发送滑块验证执行异常通知")
+                logger.error(f"【{self.cookie_id}】滑块验证失败: {result.message}")
+                try:
                     await self.send_token_refresh_notification(
-                        f"滑块验证执行异常，需要手动处理。验证URL: {verification_url}",
-                        "captcha_execution_error"
+                        f"滑块验证失败，需要手动处理。验证URL: {verification_url}",
+                        "captcha_verification_failed",
                     )
+                except Exception as notify_error:
+                    logger.warning(f"【{self.cookie_id}】滑块失败通知发送失败: {self._safe_str(notify_error)}")
                 return None
 
+            updated_cookies = self.cookies.copy()
+            for name, value in result.x5_cookies.items():
+                updated_cookies[name] = value
+            x5_names = {str(name).lower() for name in result.x5_cookies}
+            if "x5sec" in x5_names:
+                for stale_name in CAPTCHA_CHALLENGE_COOKIES:
+                    for existing_name in list(updated_cookies):
+                        if existing_name.lower() == stale_name and existing_name not in result.x5_cookies:
+                            updated_cookies.pop(existing_name, None)
+                            logger.info(f"【{self.cookie_id}】清除旧挑战Cookie: {existing_name}")
+            cookies_str = "; ".join(f"{name}={value}" for name, value in updated_cookies.items())
+            old_cookies_str = self.cookies_str
+            old_cookies_dict = self.cookies.copy()
+            try:
+                self.cookies_str = cookies_str
+                self.cookies = updated_cookies
+                await self.update_config_cookies()
+            except Exception:
+                self.cookies_str = old_cookies_str
+                self.cookies = old_cookies_dict
+                raise
 
-
-        except Exception as e:
-            logger.error(f"【{self.cookie_id}】处理滑块验证时出错: {self._safe_str(e)}")
+            log_captcha_event(
+                self.cookie_id,
+                "滑块验证成功并自动更新数据库",
+                True,
+                f"engine={result.engine}; x5_keys={sorted(result.x5_cookies)}; cookie_fields={len(updated_cookies)}",
+            )
+            logger.success(f"【{self.cookie_id}】滑块验证成功，Cookie已更新: engine={result.engine}")
+            try:
+                await self.send_token_refresh_notification(
+                    "滑块验证成功，cookies已自动更新到数据库",
+                    "captcha_success_auto_update",
+                )
+            except Exception as notify_error:
+                logger.warning(f"【{self.cookie_id}】滑块成功通知发送失败: {self._safe_str(notify_error)}")
+            return cookies_str
+        except Exception as exc:
+            message = self._safe_str(exc)
+            logger.exception(f"【{self.cookie_id}】滑块验证异常: {message}")
+            log_captcha_event(self.cookie_id, "滑块验证异常", False, message[:200])
             return None
 
     async def _update_cookies_and_restart(self, new_cookies_str: str):
@@ -3157,8 +3048,10 @@ class XianyuLive:
                 )
                 return False
             
-            # 使用集成的 Playwright 登录方法（无需猴子补丁）
-            from utils.xianyu_slider_stealth import XianyuSliderStealth
+            # 密码登录同样优先走参考项目的 slidex 运行时。
+            from utils.slider_runtime import load_slider_class
+            XianyuSliderStealth, slider_runtime = load_slider_class()
+            logger.info(f"【{self.cookie_id}】密码登录滑块运行时: {slider_runtime}")
             browser_mode = "有头" if show_browser else "无头"
             logger.info(f"【{self.cookie_id}】开始使用{browser_mode}浏览器进行密码登录刷新Cookie...")
             logger.info(f"【{self.cookie_id}】使用账号: {username}")

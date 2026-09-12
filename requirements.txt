@@ -32,6 +32,8 @@ python-multipart>=0.0.6
 openai>=1.50.0
 
 # ==================== 图像处理 ====================
+numpy>=1.24,<2
+opencv-python-headless>=4.8.0,<4.13
 Pillow>=10.0.0
 qrcode[pil]>=7.4.2
 
@@ -46,6 +48,9 @@ playwright==1.60.0
 # API 完全兼容，复用上面那份 Chromium（代码里显式传 executable_path），不额外下载。
 patchright==1.62.3
 DrissionPage>=4.0.0
+# Reference project's trajectory/stealth runtime. The local solver remains a
+# compatibility fallback when this optional package is unavailable.
+slidex @ git+https://github.com/dengyie/slidex.git@5d26af863102becd7a0d7354decf8f9b52f67d46
 
 # ==================== 加密和安全 ====================
 PyJWT>=2.8.0

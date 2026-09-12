@@ -2343,8 +2343,10 @@ async def _execute_password_login(session_id: str, account_id: str, account: str
     try:
         log_with_user('info', f"开始执行账号密码登录任务: {session_id}, 账号: {account_id}", current_user)
         
-        # 导入 XianyuSliderStealth
-        from utils.xianyu_slider_stealth import XianyuSliderStealth
+        # 优先使用参考项目的 slidex 滑块实现，未安装时才保留本地兼容实现。
+        from utils.slider_runtime import load_slider_class
+        XianyuSliderStealth, slider_runtime = load_slider_class()
+        log_with_user('info', f"滑块验证运行时: {slider_runtime}", current_user)
         
         # 定义通知回调函数，用于检测到人脸认证时返回验证链接或截图（同步函数）
         def notification_callback(message: str, screenshot_path: str = None, verification_url: str = None, screenshot_path_new: str = None):

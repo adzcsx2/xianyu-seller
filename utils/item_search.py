@@ -566,8 +566,10 @@ class XianyuSearcher:
                 if is_scratch_captcha:
                     pass  # slider_success 已经在上面设置
                 else:
-                    # 普通滑块：使用 XianyuSliderStealth（同步API）
-                    from utils.xianyu_slider_stealth import XianyuSliderStealth
+                    # 普通滑块：优先使用参考项目的 slidex（同步 API）。
+                    from utils.slider_runtime import load_slider_class
+                    XianyuSliderStealth, slider_runtime = load_slider_class()
+                    logger.info(f"普通滑块运行时: {slider_runtime}")
                     
                     # 创建滑块处理实例
                     slider_handler = XianyuSliderStealth(
@@ -1640,6 +1642,5 @@ async def search_multiple_pages_xianyu(keyword: str, total_pages: int = 1) -> Di
         'total': 0,
         'error': "未知错误"
     }
-
 
 

@@ -19,7 +19,7 @@ RUN VITE_OUT_DIR=dist npm run build
 FROM base AS builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
+    apt-get install -y --no-install-recommends curl ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv && \
