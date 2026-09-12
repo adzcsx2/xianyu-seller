@@ -1086,10 +1086,25 @@ export const deleteRiskControlLog = async (logId: number): Promise<ApiResponse> 
 
 export const getSystemLogs = async (params: {
   lines?: number;
+  offset?: number;
   level?: string;
   source?: string;
-} = {}): Promise<{ success: boolean; logs: SystemLog[]; message?: string }> => {
+  start_time?: string;
+  end_time?: string;
+} = {}): Promise<{
+  success: boolean;
+  logs: SystemLog[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
+  message?: string;
+}> => {
   return get('/logs', params);
+};
+
+export const clearSystemLogs = async (): Promise<ApiResponse> => {
+  return post('/logs/clear', {});
 };
 
 // Message Filters

@@ -6963,17 +6963,34 @@ async def test_ai_reply(cookie_id: str, test_data: AIReplyTestRequest,
 # ==================== 日志管理API ====================
 
 @app.get("/logs")
-async def get_logs(lines: int = 200, level: str = None, source: str = None,
-                   _: Dict[str, Any] = Depends(require_admin)):
+async def get_logs(
+    lines: int = 1000,
+    offset: int = 0,
+    level: str = None,
+    source: str = None,
+    start_time: str = None,
+    end_time: str = None,
+    _: Dict[str, Any] = Depends(require_admin),
+):
     """获取实时系统日志"""
     try:
         # 获取文件日志收集器
         collector = get_file_log_collector()
 
-        # 获取日志
-        logs = collector.get_logs(lines=lines, level_filter=level, source_filter=source)
+        # 每页最多返回1000条，按最新日志向前分页，避免一次性加载整个日志目录。
+        page = collector.get_logs_page(
+            lines=max(1, min(lines, 1000)),
+            offset=max(0, offset),
+            level_filter=level,
+            source_filter=source,
+            start_time=start_time,
+            end_time=end_time,
+        )
 
-        return {"success": True, "logs": logs}
+        return {"success": True, **page}
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         return {"success": False, "message": f"获取日志失败: {str(e)}", "logs": []}

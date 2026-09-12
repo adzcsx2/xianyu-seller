@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BellRing,
@@ -25,6 +25,7 @@ import {
 } from '../types';
 import {
   createNotificationChannel,
+  clearSystemLogs,
   deleteMessageNotification,
   deleteNotificationChannel,
   deleteRiskControlLog,
@@ -121,6 +122,9 @@ const CHANNEL_DEFINITIONS: Record<NotificationChannelType, ChannelDefinition> = 
 };
 
 const PAGE_SIZE = 20;
+const SYSTEM_LOG_PAGE_SIZE = 1000;
+
+type SystemTimeRange = 'all' | '1m' | '5m' | '30m' | '24h' | 'custom';
 
 const accountLabel = (account: AccountDetail) =>
   account.nickname || account.remark || account.id;
@@ -132,7 +136,7 @@ const formatTime = (value?: string) => {
 };
 
 const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) => {
-  const [activeTab, setActiveTab] = useState<PageTab>('channels');
+  const [activeTab, setActiveTab] = useState<PageTab>(() => (isAdmin ? 'system' : 'channels'));
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [bindings, setBindings] = useState<MessageNotification[]>([]);
@@ -156,6 +160,13 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
   const [systemLevel, setSystemLevel] = useState('');
   const [systemSource, setSystemSource] = useState('');
   const [systemLoading, setSystemLoading] = useState(false);
+  const [systemLoadingMore, setSystemLoadingMore] = useState(false);
+  const [systemOffset, setSystemOffset] = useState(0);
+  const [systemHasMore, setSystemHasMore] = useState(false);
+  const [systemTimeRange, setSystemTimeRange] = useState<SystemTimeRange>('all');
+  const [systemStartTime, setSystemStartTime] = useState('');
+  const [systemEndTime, setSystemEndTime] = useState('');
+  const systemRequestId = useRef(0);
 
   const loadBaseData = async () => {
     setLoadingBase(true);
@@ -322,35 +333,116 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
     }
   };
 
-  const loadSystemLogs = async () => {
+  const getSystemTimeParams = () => {
+    if (systemTimeRange === 'all') return {};
+    if (systemTimeRange === 'custom') {
+      const toIso = (value: string) => {
+        if (!value) return undefined;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+      };
+      return {
+        start_time: toIso(systemStartTime),
+        end_time: toIso(systemEndTime),
+      };
+    }
+
+    const durationMs: Record<Exclude<SystemTimeRange, 'all' | 'custom'>, number> = {
+      '1m': 60_000,
+      '5m': 5 * 60_000,
+      '30m': 30 * 60_000,
+      '24h': 24 * 60 * 60_000,
+    };
+    const end = new Date();
+    return {
+      start_time: new Date(end.getTime() - durationMs[systemTimeRange]).toISOString(),
+      end_time: end.toISOString(),
+    };
+  };
+
+  const loadSystemLogs = async (silent = false, append = false) => {
     if (!isAdmin) return;
-    setSystemLoading(true);
+    if (append) {
+      if (systemLoading || systemLoadingMore || !systemHasMore) return;
+      setSystemLoadingMore(true);
+    } else {
+      if (systemLoadingMore) return;
+      setSystemLoading(true);
+    }
+
+    const offset = append ? systemOffset : 0;
+    const requestId = ++systemRequestId.current;
     try {
       const result = await getSystemLogs({
-        lines: 300,
+        lines: SYSTEM_LOG_PAGE_SIZE,
+        offset,
         level: systemLevel || undefined,
         source: systemSource.trim() || undefined,
+        ...getSystemTimeParams(),
       });
       if (!result.success) throw new Error(result.message || '加载失败');
-      setSystemLogs(result.logs || []);
+      if (requestId !== systemRequestId.current) return;
+      const page = [...(result.logs || [])].reverse();
+      setSystemLogs((current) => (append ? [...current, ...page] : page));
+      setSystemOffset((result.offset ?? offset) + page.length);
+      setSystemHasMore(Boolean(result.has_more));
     } catch (error) {
-      notify(`加载系统日志失败：${(error as Error).message}`);
+      if (requestId === systemRequestId.current && !silent) {
+        notify(`加载系统日志失败：${(error as Error).message}`);
+      }
     } finally {
-      setSystemLoading(false);
+      if (requestId === systemRequestId.current) {
+        if (append) setSystemLoadingMore(false);
+        else setSystemLoading(false);
+      }
+    }
+  };
+
+  const clearAllSystemLogs = async () => {
+    if (!await confirmAction('确认清空全部系统日志？清空后无法恢复。')) return;
+    try {
+      const result = await clearSystemLogs();
+      if (result.success === false) throw new Error(result.message || '清空失败');
+      setSystemLogs([]);
+      setSystemOffset(0);
+      setSystemHasMore(false);
+      notify('系统日志已清空');
+    } catch (error) {
+      notify(`清空系统日志失败：${(error as Error).message}`);
+    }
+  };
+
+  const handleSystemLogScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+    if (element.scrollHeight - element.scrollTop - element.clientHeight < 80) {
+      void loadSystemLogs(false, true);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'system' && isAdmin) void loadSystemLogs();
-  }, [activeTab]);
+    if (activeTab !== 'system' || !isAdmin) return undefined;
+    void loadSystemLogs(true);
+    const refreshTimer = window.setInterval(() => {
+      void loadSystemLogs(true);
+    }, 15_000);
+    return () => window.clearInterval(refreshTimer);
+  }, [
+    activeTab,
+    isAdmin,
+    systemLevel,
+    systemSource,
+    systemTimeRange,
+    systemStartTime,
+    systemEndTime,
+  ]);
 
   const riskPageCount = Math.max(1, Math.ceil(riskTotal / PAGE_SIZE));
 
   const tabs: Array<{ id: PageTab; label: string; icon: typeof BellRing }> = [
+    ...(isAdmin ? [{ id: 'system' as PageTab, label: '系统日志', icon: Activity }] : []),
     { id: 'channels', label: '通知渠道', icon: BellRing },
     { id: 'bindings', label: '账号通知', icon: Link2 },
     { id: 'risk', label: '风控日志', icon: ShieldAlert },
-    ...(isAdmin ? [{ id: 'system' as PageTab, label: '系统日志', icon: Activity }] : []),
   ];
 
   return (
@@ -643,10 +735,45 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
         <section className="section-panel">
           <SectionHeader
             title="系统运行日志"
-            description="最多读取最近 300 行，可按级别和来源快速定位运行异常。"
+            description="每次显示 1000 条，滚动到底部自动加载下一批；默认每 15 秒自动刷新，也可以手动刷新。"
             icon={Activity}
           />
-          <div className="grid gap-3 border-b border-gray-200 bg-gray-50/60 p-4 sm:grid-cols-[160px_1fr_auto]">
+          <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50/60 p-4">
+            <select
+              value={systemTimeRange}
+              onChange={(event) => setSystemTimeRange(event.target.value as SystemTimeRange)}
+              aria-label="日志时间范围"
+              className="ios-input rounded-md px-3 py-2.5 text-sm"
+            >
+              <option value="all">全部时间</option>
+              <option value="1m">最近 1 分钟</option>
+              <option value="5m">最近 5 分钟</option>
+              <option value="30m">最近 30 分钟</option>
+              <option value="24h">最近 24 小时</option>
+              <option value="custom">自定义时间段</option>
+            </select>
+            {systemTimeRange === 'custom' && (
+              <>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  从
+                  <input
+                    type="datetime-local"
+                    value={systemStartTime}
+                    onChange={(event) => setSystemStartTime(event.target.value)}
+                    className="ios-input rounded-md px-3 py-2.5 text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  到
+                  <input
+                    type="datetime-local"
+                    value={systemEndTime}
+                    onChange={(event) => setSystemEndTime(event.target.value)}
+                    className="ios-input rounded-md px-3 py-2.5 text-sm"
+                  />
+                </label>
+              </>
+            )}
             <select
               value={systemLevel}
               onChange={(event) => setSystemLevel(event.target.value)}
@@ -662,20 +789,31 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
               value={systemSource}
               onChange={(event) => setSystemSource(event.target.value)}
               placeholder="按日志来源筛选"
-              className="ios-input rounded-md px-3 py-2.5 text-sm"
+              className="ios-input min-w-48 flex-1 rounded-md px-3 py-2.5 text-sm"
             />
             <button
               type="button"
               onClick={() => void loadSystemLogs()}
-              disabled={systemLoading}
+              disabled={systemLoading || systemLoadingMore}
               className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
             >
-              <RefreshCw className={`h-4 w-4 ${systemLoading ? 'animate-spin' : ''}`} />
-              查询
+              <RefreshCw className={`h-4 w-4 ${systemLoading || systemLoadingMore ? 'animate-spin' : ''}`} />
+              手动刷新
+            </button>
+            <button
+              type="button"
+              onClick={() => void clearAllSystemLogs()}
+              className="flex items-center justify-center gap-2 rounded-md bg-red-50 px-4 py-2.5 text-sm text-red-700 hover:bg-red-100"
+            >
+              <Trash2 className="h-4 w-4" />
+              清空日志
             </button>
           </div>
-          <div className="max-h-[620px] divide-y divide-gray-100 overflow-y-auto px-4 font-mono text-xs">
-            {[...systemLogs].reverse().map((log, index) => (
+          <div
+            className="max-h-[620px] divide-y divide-gray-100 overflow-y-auto px-4 font-mono text-xs"
+            onScroll={handleSystemLogScroll}
+          >
+            {systemLogs.map((log, index) => (
               <div key={`${log.timestamp}-${index}`} className="grid gap-2 py-3 lg:grid-cols-[165px_80px_180px_minmax(0,1fr)]">
                 <span className="text-gray-500">{formatTime(log.timestamp)}</span>
                 <span className={`font-bold ${
@@ -685,6 +823,15 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
                 <span className="break-words text-gray-800">{log.message}</span>
               </div>
             ))}
+            {systemLoadingMore && (
+              <p className="py-3 text-center text-gray-500">正在加载更早的 1000 条日志…</p>
+            )}
+            {!systemLoadingMore && systemLogs.length > 0 && systemHasMore && (
+              <p className="py-3 text-center text-gray-500">继续滚动到底部加载更早的日志</p>
+            )}
+            {!systemLoadingMore && systemLogs.length > 0 && !systemHasMore && (
+              <p className="py-3 text-center text-gray-400">已加载全部符合条件的日志（{systemLogs.length} 条）</p>
+            )}
             {!systemLoading && systemLogs.length === 0 && (
               <EmptyState compact title="暂无系统日志" description="当前筛选条件没有返回运行记录。" icon={Activity} />
             )}
