@@ -11,25 +11,26 @@ import random
 from loguru import logger
 from DrissionPage import Chromium, ChromiumOptions
 from utils.mtop_browser_fingerprint import build_mtop_request_headers
+from utils.log_retention import append_daily_log
+from utils.log_sanitizer import redact_sensitive_text
 
 def log_captcha_event(cookie_id: str, event_type: str, success: bool = None, details: str = ""):
     """简单记录滑块验证事件到txt文件"""
     try:
-        import os
-        log_dir = 'logs'
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, 'captcha_verification.txt')
+        log_dir = os.getenv('LOG_DIR') or 'logs'
 
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         status = "成功" if success is True else "失败" if success is False else "进行中"
 
         log_entry = f"[{timestamp}] 【{cookie_id}】{event_type} - {status}"
         if details:
-            log_entry += f" - {details}"
-        log_entry += "\n"
-
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
+            log_entry += f" - {redact_sensitive_text(details)}"
+        append_daily_log(
+            log_dir,
+            "captcha_verification",
+            log_entry,
+            extension=".txt",
+        )
 
     except Exception as e:
         logger.error(f"记录滑块验证日志失败: {e}")

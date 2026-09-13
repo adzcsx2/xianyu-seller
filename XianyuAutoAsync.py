@@ -27,6 +27,11 @@ from app.db_manager import db_manager
 from app.feature_flags import FEATURE_FLAG_REGISTRY
 from app.specification import combine_legacy_specification
 from utils.log_sanitizer import redact_log_record, redact_sensitive_text
+from utils.log_retention import (
+    LOG_RETENTION_DAYS,
+    append_daily_log,
+    prune_expired_log_files,
+)
 from utils.mtop_browser_fingerprint import build_mtop_request_headers
 
 
@@ -169,34 +174,34 @@ def log_captcha_event(cookie_id: str, event_type: str, success: bool = None, det
         details: 详细信息
     """
     try:
-        log_dir = 'logs'
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, 'captcha_verification.txt')
-
+        log_dir = os.getenv('LOG_DIR') or 'logs'
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         status = "成功" if success is True else "失败" if success is False else "进行中"
 
         log_entry = f"[{timestamp}] 【{cookie_id}】{event_type} - {status}"
         if details:
             log_entry += f" - {redact_sensitive_text(details)}"
-        log_entry += "\n"
-
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
+        append_daily_log(
+            log_dir,
+            "captcha_verification",
+            log_entry,
+            extension=".txt",
+        )
 
     except Exception as e:
         logger.error(f"记录滑块验证日志失败: {e}")
 
 # 日志配置
-log_dir = 'logs'
+log_dir = os.getenv('LOG_DIR') or 'logs'
 os.makedirs(log_dir, exist_ok=True)
+prune_expired_log_files(log_dir)
 log_path = os.path.join(log_dir, f"xianyu_{time.strftime('%Y-%m-%d')}.log")
 logger.remove()
 logger.configure(patcher=redact_log_record)
 logger.add(
     log_path,
     rotation=LOG_CONFIG.get('rotation', '1 day'),
-    retention=LOG_CONFIG.get('retention', '7 days'),
+    retention=f'{LOG_RETENTION_DAYS} days',
     compression=LOG_CONFIG.get('compression', 'zip'),
     level=LOG_CONFIG.get('level', 'DEBUG'),
     format=LOG_CONFIG.get('format', '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>'),
@@ -719,7 +724,7 @@ class XianyuLive:
         except Exception as e:
             logger.warning(f"【{self.cookie_id}】清理Playwright缓存时出错: {self._safe_str(e)}")
 
-    async def _cleanup_old_logs(self, retention_days: int = 7):
+    async def _cleanup_old_logs(self, retention_days: int = LOG_RETENTION_DAYS):
         """清理过期的日志文件
         
         Args:
@@ -729,47 +734,17 @@ class XianyuLive:
             清理的文件数量
         """
         try:
-            import glob
-            from datetime import datetime, timedelta
-            
-            logs_dir = "logs"
-            if not os.path.exists(logs_dir):
+            logs_dir = os.getenv('LOG_DIR') or 'logs'
+            if not os.path.isdir(logs_dir):
                 logger.warning(f"【{self.cookie_id}】日志目录不存在: {logs_dir}")
                 return 0
-            
-            # 计算过期时间点
-            cutoff_time = datetime.now() - timedelta(days=retention_days)
-            
-            # 查找所有日志文件（包括.log和.log.zip）
-            log_patterns = [
-                os.path.join(logs_dir, "xianyu_*.log"),
-                os.path.join(logs_dir, "xianyu_*.log.zip"),
-                os.path.join(logs_dir, "app_*.log"),
-                os.path.join(logs_dir, "app_*.log.zip"),
-            ]
-            
-            total_cleaned = 0
-            total_size_mb = 0
-            
-            for pattern in log_patterns:
-                log_files = glob.glob(pattern)
-                for log_file in log_files:
-                    try:
-                        # 获取文件修改时间
-                        file_mtime = datetime.fromtimestamp(os.path.getmtime(log_file))
-                        
-                        # 如果文件早于保留期限，则删除
-                        if file_mtime < cutoff_time:
-                            file_size = os.path.getsize(log_file)
-                            os.remove(log_file)
-                            total_size_mb += file_size / (1024 * 1024)
-                            total_cleaned += 1
-                            logger.debug(f"【{self.cookie_id}】删除过期日志文件: {log_file} (修改时间: {file_mtime})")
-                    except Exception as e:
-                        logger.warning(f"【{self.cookie_id}】删除日志文件失败 {log_file}: {self._safe_str(e)}")
-            
+            total_cleaned = await asyncio.to_thread(
+                prune_expired_log_files,
+                logs_dir,
+                retention_days=retention_days,
+            )
             if total_cleaned > 0:
-                logger.info(f"【{self.cookie_id}】日志清理完成: 删除了 {total_cleaned} 个日志文件，释放 {total_size_mb:.2f} MB (保留 {retention_days} 天内的日志)")
+                logger.info(f"【{self.cookie_id}】日志清理完成: 删除了 {total_cleaned} 个日志文件 (保留 {retention_days} 天内的日志)")
             else:
                 logger.debug(f"【{self.cookie_id}】日志清理: 没有需要清理的过期日志文件 (保留 {retention_days} 天)")
             
@@ -7077,7 +7052,9 @@ class XianyuLive:
                     
                     # 清理过期的日志文件（每5分钟检查一次，保留7天）
                     try:
-                        cleaned_logs = await self._cleanup_old_logs(retention_days=7)
+                        cleaned_logs = await self._cleanup_old_logs(
+                            retention_days=LOG_RETENTION_DAYS
+                        )
                         await asyncio.sleep(0)  # 让出控制权，允许检查取消信号
                     except asyncio.CancelledError:
                         raise

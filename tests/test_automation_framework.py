@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import closing, redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -110,6 +111,41 @@ class AutomationFrameworkTests(unittest.TestCase):
         self.assertEqual(environment["PYTHONIOENCODING"], "utf-8")
         self.assertEqual(environment["SQL_LOG_ENABLED"], "false")
         self.assertEqual(environment["TESTING"], "1")
+
+        with tempfile.TemporaryDirectory() as directory:
+            log_dir = Path(directory) / "runtime-logs"
+            static_dir = Path(directory) / "frontend-static"
+            isolated = runner.build_test_environment(
+                Path("C:/test/database.db"),
+                log_dir=log_dir,
+                static_dir=static_dir,
+            )
+            self.assertEqual(isolated["LOG_DIR"], os.fspath(log_dir.resolve()))
+            self.assertEqual(
+                isolated["STATIC_DIR"], os.fspath(static_dir.resolve())
+            )
+            self.assertTrue((static_dir / "assets").is_dir())
+
+    def test_console_output_replaces_unencodable_unicode(self):
+        runner = load_runner()
+
+        class AsciiConsole(io.StringIO):
+            encoding = "ascii"
+
+            def write(self, value):
+                value.encode(self.encoding)
+                return super().write(value)
+
+        console = AsciiConsole()
+        completed = subprocess.CompletedProcess(
+            ["test"], 0, "测试浏览器启动失败 ✅\n", ""
+        )
+        with redirect_stdout(console):
+            runner._print_result("unicode", completed, verbose=True)
+
+        rendered = console.getvalue()
+        self.assertIn("[PASS] unicode", rendered)
+        self.assertIn("?", rendered)
 
     def test_quality_commands_use_detached_frontend_build(self):
         runner = load_runner()
@@ -374,6 +410,29 @@ class AutomationFrameworkTests(unittest.TestCase):
             self.assertEqual(result, 5)
             self.assertEqual(process.call_count, 1)
 
+    def test_e2e_frontend_build_uses_the_static_directory_served_by_tests(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory)
+            static_dir = artifacts / "frontend-static"
+            environment = {"STATIC_DIR": os.fspath(static_dir)}
+            with mock.patch.object(runner, "_run_process", return_value=0) as process:
+                result = runner._build_e2e_frontend(
+                    environment=environment,
+                    artifact_dir=artifacts,
+                    verbose=False,
+                )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                process.call_args.kwargs["environment"]["TEST_ARTIFACT_DIR"],
+                os.fspath(static_dir),
+            )
+            self.assertEqual(
+                process.call_args.kwargs["command"],
+                ["node", "frontend/scripts/build-test.mjs"],
+            )
+
     def test_worker_and_suite_listing_paths(self):
         runner = load_runner()
         successful = mock.Mock()
@@ -435,6 +494,31 @@ class AutomationFrameworkTests(unittest.TestCase):
                 self.assertEqual(runner.main([]), 2)
             self.assertIn("Database preparation", errors.getvalue())
 
+    def test_test_artifacts_older_than_seven_days_are_pruned(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            now = time.time()
+            old_timestamp = now - (8 * 24 * 60 * 60)
+            recent_timestamp = now - (6 * 24 * 60 * 60)
+            old_run = root / "old-run"
+            old_run.mkdir()
+            (old_run / "python-all.log").write_text("old", encoding="utf-8")
+            os.utime(old_run, (old_timestamp, old_timestamp))
+            recent_run = root / "recent-run"
+            recent_run.mkdir()
+            os.utime(recent_run, (recent_timestamp, recent_timestamp))
+            old_file = root / "old-screenshot.png"
+            old_file.write_bytes(b"old")
+            os.utime(old_file, (old_timestamp, old_timestamp))
+
+            removed = runner._prune_old_artifacts(root, now=now)
+
+            self.assertEqual(removed, 2)
+            self.assertFalse(old_run.exists())
+            self.assertFalse(old_file.exists())
+            self.assertTrue(recent_run.exists())
+
     def test_main_propagates_backend_and_quality_results(self):
         runner = load_runner()
         with tempfile.TemporaryDirectory() as directory:
@@ -453,6 +537,7 @@ class AutomationFrameworkTests(unittest.TestCase):
                 mock.patch.object(runner, "_create_artifact_dir", return_value=root),
                 mock.patch.object(runner, "prepare_database", return_value=target),
                 mock.patch.object(runner, "build_test_environment", return_value={}),
+                mock.patch.object(runner, "_build_e2e_frontend", return_value=0),
                 mock.patch.object(runner, "_run_backend", return_value=0),
                 mock.patch.object(runner, "_run_quality_commands", return_value=8),
                 redirect_stdout(io.StringIO()),
@@ -463,6 +548,9 @@ class AutomationFrameworkTests(unittest.TestCase):
                 mock.patch.object(runner, "_create_artifact_dir", return_value=root),
                 mock.patch.object(runner, "prepare_database", return_value=target),
                 mock.patch.object(runner, "build_test_environment", return_value={}),
+                mock.patch.object(
+                    runner, "_build_e2e_frontend", return_value=0
+                ) as frontend_build,
                 mock.patch.object(runner, "_run_backend", return_value=0) as backend,
                 mock.patch.object(runner, "_run_quality_commands", return_value=0) as quality,
                 redirect_stdout(io.StringIO()) as output,
@@ -471,6 +559,7 @@ class AutomationFrameworkTests(unittest.TestCase):
             self.assertEqual(backend.call_args.kwargs["suite"], "all")
             self.assertTrue(backend.call_args.kwargs["coverage"])
             self.assertEqual(backend.call_args.kwargs["fail_under"], 42.0)
+            frontend_build.assert_called_once()
             quality.assert_called_once()
             self.assertIn("Automation test run completed", output.getvalue())
 

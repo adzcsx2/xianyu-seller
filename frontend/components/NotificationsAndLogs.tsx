@@ -123,8 +123,15 @@ const CHANNEL_DEFINITIONS: Record<NotificationChannelType, ChannelDefinition> = 
 
 const PAGE_SIZE = 20;
 const SYSTEM_LOG_PAGE_SIZE = 1000;
+const SYSTEM_LOG_REFRESH_INTERVAL_MS = 30_000;
 
 type SystemTimeRange = 'all' | '1m' | '5m' | '30m' | '24h' | 'custom';
+type SystemLogQuery = {
+  level?: string;
+  source?: string;
+  start_time?: string;
+  end_time?: string;
+};
 
 const accountLabel = (account: AccountDetail) =>
   account.nickname || account.remark || account.id;
@@ -167,6 +174,12 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
   const [systemStartTime, setSystemStartTime] = useState('');
   const [systemEndTime, setSystemEndTime] = useState('');
   const systemRequestId = useRef(0);
+  const systemLoadingRef = useRef(false);
+  const systemLoadingMoreRef = useRef(false);
+  const systemPendingRefreshRef = useRef<{
+    silent: boolean;
+    query: SystemLogQuery;
+  } | null>(null);
 
   const loadBaseData = async () => {
     setLoadingBase(true);
@@ -360,13 +373,28 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
     };
   };
 
-  const loadSystemLogs = async (silent = false, append = false) => {
+  const loadSystemLogs = async (
+    silent = false,
+    append = false,
+    queueIfBusy = false,
+    queryOverride?: SystemLogQuery,
+  ) => {
     if (!isAdmin) return;
+    const query = queryOverride ?? {
+      level: systemLevel || undefined,
+      source: systemSource.trim() || undefined,
+      ...getSystemTimeParams(),
+    };
     if (append) {
-      if (systemLoading || systemLoadingMore || !systemHasMore) return;
+      if (systemLoadingRef.current || systemLoadingMoreRef.current || !systemHasMore) return;
+      systemLoadingMoreRef.current = true;
       setSystemLoadingMore(true);
     } else {
-      if (systemLoadingMore) return;
+      if (systemLoadingRef.current || systemLoadingMoreRef.current) {
+        if (queueIfBusy) systemPendingRefreshRef.current = { silent, query };
+        return;
+      }
+      systemLoadingRef.current = true;
       setSystemLoading(true);
     }
 
@@ -376,9 +404,7 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
       const result = await getSystemLogs({
         lines: SYSTEM_LOG_PAGE_SIZE,
         offset,
-        level: systemLevel || undefined,
-        source: systemSource.trim() || undefined,
-        ...getSystemTimeParams(),
+        ...query,
       });
       if (!result.success) throw new Error(result.message || '加载失败');
       if (requestId !== systemRequestId.current) return;
@@ -392,8 +418,23 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
       }
     } finally {
       if (requestId === systemRequestId.current) {
-        if (append) setSystemLoadingMore(false);
-        else setSystemLoading(false);
+        if (append) {
+          systemLoadingMoreRef.current = false;
+          setSystemLoadingMore(false);
+        } else {
+          systemLoadingRef.current = false;
+          setSystemLoading(false);
+        }
+        const pendingRefresh = systemPendingRefreshRef.current;
+        if (pendingRefresh) {
+          systemPendingRefreshRef.current = null;
+          void loadSystemLogs(
+            pendingRefresh.silent,
+            false,
+            false,
+            pendingRefresh.query,
+          );
+        }
       }
     }
   };
@@ -421,11 +462,14 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
 
   useEffect(() => {
     if (activeTab !== 'system' || !isAdmin) return undefined;
-    void loadSystemLogs(true);
+    void loadSystemLogs(true, false, true);
     const refreshTimer = window.setInterval(() => {
       void loadSystemLogs(true);
-    }, 15_000);
-    return () => window.clearInterval(refreshTimer);
+    }, SYSTEM_LOG_REFRESH_INTERVAL_MS);
+    return () => {
+      window.clearInterval(refreshTimer);
+      systemPendingRefreshRef.current = null;
+    };
   }, [
     activeTab,
     isAdmin,
@@ -735,7 +779,7 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
         <section className="section-panel">
           <SectionHeader
             title="系统运行日志"
-            description="每次显示 1000 条，滚动到底部自动加载下一批；默认每 15 秒自动刷新，也可以手动刷新。"
+            description="每次显示 1000 条，滚动到底部自动加载下一批；默认每 30 秒自动刷新，也可以手动刷新。"
             icon={Activity}
           />
           <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50/60 p-4">
@@ -793,7 +837,7 @@ const NotificationsAndLogs: React.FC<NotificationsAndLogsProps> = ({ isAdmin }) 
             />
             <button
               type="button"
-              onClick={() => void loadSystemLogs()}
+              onClick={() => void loadSystemLogs(false, false, true)}
               disabled={systemLoading || systemLoadingMore}
               className="ios-btn-secondary flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm"
             >

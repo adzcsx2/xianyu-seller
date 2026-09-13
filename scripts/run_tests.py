@@ -11,9 +11,11 @@ import argparse
 import os
 import shutil
 import sqlite3
+import stat as stat_module
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 from contextlib import closing
@@ -22,17 +24,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Sequence
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIVE_DATABASE = PROJECT_ROOT / "data" / "xianyu_data.db"
 DEFAULT_TEMP_ROOT = PROJECT_ROOT / ".tmp" / "test-work"
 DEFAULT_ARTIFACT_ROOT = PROJECT_ROOT / "logs" / "test-artifacts"
 DEFAULT_BACKUP_ROOT = PROJECT_ROOT / "backups" / "test-runs"
+TEST_ARTIFACT_RETENTION_DAYS = 7
 
 E2E_TEST_MODULES = frozenset(
     {
         "tests.test_manual_captcha_flow",
+        "tests.test_knowledge_base_ui",
         "tests.test_password_login_ui",
+        "tests.test_system_logs_ui",
         "tests.test_stealth_script_effective",
     }
 )
@@ -106,7 +110,12 @@ def prepare_database(
     )
 
 
-def build_test_environment(database_path: Path) -> dict[str, str]:
+def build_test_environment(
+    database_path: Path,
+    *,
+    log_dir: Path | None = None,
+    static_dir: Path | None = None,
+) -> dict[str, str]:
     environment = os.environ.copy()
     environment.update(
         {
@@ -117,6 +126,12 @@ def build_test_environment(database_path: Path) -> dict[str, str]:
             "TESTING": "1",
         }
     )
+    if log_dir is not None:
+        environment["LOG_DIR"] = os.fspath(log_dir.resolve())
+    if static_dir is not None:
+        resolved_static_dir = static_dir.resolve()
+        (resolved_static_dir / "assets").mkdir(parents=True, exist_ok=True)
+        environment["STATIC_DIR"] = os.fspath(resolved_static_dir)
     return environment
 
 
@@ -198,7 +213,7 @@ def _print_result(label: str, completed: subprocess.CompletedProcess, verbose: b
     status = "PASS" if completed.returncode == 0 else "FAIL"
     print(f"[{status}] {label}")
     if verbose or completed.returncode != 0:
-        print(output.rstrip())
+        _print_console(output.rstrip())
         return
     summary = [
         line
@@ -207,6 +222,20 @@ def _print_result(label: str, completed: subprocess.CompletedProcess, verbose: b
     ]
     for line in summary[-4:]:
         print(f"  {line}")
+
+
+def _print_console(value: str) -> None:
+    """Write subprocess output without crashing on a legacy Windows console."""
+    if not value:
+        return
+    try:
+        print(value)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe_value = value.encode(encoding, errors="replace").decode(
+            encoding, errors="replace"
+        )
+        print(safe_value)
 
 
 def _run_process(
@@ -348,11 +377,66 @@ def _run_quality_commands(
     return 0
 
 
+def _build_e2e_frontend(
+    *,
+    environment: dict[str, str],
+    artifact_dir: Path,
+    verbose: bool,
+) -> int:
+    """Build the exact frontend that the E2E worker will serve."""
+    build_environment = environment.copy()
+    build_environment["TEST_ARTIFACT_DIR"] = environment["STATIC_DIR"]
+    return _run_process(
+        label="E2E frontend build",
+        command=["node", "frontend/scripts/build-test.mjs"],
+        environment=build_environment,
+        log_path=artifact_dir / "e2e-frontend-build.log",
+        verbose=verbose,
+    )
+
+
 def _create_artifact_dir(suite: str) -> Path:
+    _prune_old_artifacts(DEFAULT_ARTIFACT_ROOT)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     artifact_dir = DEFAULT_ARTIFACT_ROOT / f"{timestamp}-{suite}-{uuid.uuid4().hex[:8]}"
     artifact_dir.mkdir(parents=True, exist_ok=False)
     return artifact_dir
+
+
+def _prune_old_artifacts(
+    artifact_root: Path,
+    *,
+    retention_days: int = TEST_ARTIFACT_RETENTION_DAYS,
+    now: float | None = None,
+) -> int:
+    """Remove completed test artifacts older than the shared log policy."""
+    if retention_days <= 0:
+        raise ValueError("测试工件保留天数必须大于 0")
+    if not artifact_root.is_dir():
+        return 0
+    root = artifact_root.resolve()
+    cutoff = (time.time() if now is None else float(now)) - (
+        retention_days * 24 * 60 * 60
+    )
+    removed = 0
+    for path in artifact_root.iterdir():
+        try:
+            resolved = path.resolve()
+            stat_result = path.lstat()
+            if resolved.parent != root or stat_module.S_ISLNK(stat_result.st_mode):
+                continue
+            if stat_result.st_mtime >= cutoff:
+                continue
+            if stat_module.S_ISDIR(stat_result.st_mode):
+                shutil.rmtree(path)
+            elif stat_module.S_ISREG(stat_result.st_mode):
+                path.unlink()
+            else:
+                continue
+            removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 def _print_suites() -> None:
@@ -407,7 +491,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Database path: {target.path}")
         if target.backup_path is not None:
             print(f"Live database backup: {target.backup_path}")
-        environment = build_test_environment(target.path)
+        environment = build_test_environment(
+            target.path,
+            log_dir=artifact_dir / "runtime-logs",
+            static_dir=artifact_dir / "frontend-static",
+        )
+        if suite in {"e2e", "all"}:
+            result = _build_e2e_frontend(
+                environment=environment,
+                artifact_dir=artifact_dir,
+                verbose=args.verbose,
+            )
+            if result != 0:
+                return result
         result = _run_backend(
             suite=suite,
             environment=environment,
