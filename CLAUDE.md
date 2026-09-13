@@ -76,7 +76,7 @@ For any business capability, data access, integration, diagnosis, acceptance, or
 - Keep the project-local `.worktree/` directory. All new Git worktrees must be created at `<project-root>/.worktree/<worktree-name>`; do not create sibling worktrees or default to an external directory. The root `.gitignore` contains `/.worktree/`.
 - Project hooks are execution gates, not rule sources. The installed Windows hooks are `.claude/hooks/final-rule-audit.ps1` and `.codex/hooks/final-rule-audit.ps1`, registered on `Stop`; they fail open and never edit business code.
 - The current init standard does not create `.ai/skills`, configured mirrors, `sync-project-skills.sh`, or `PostToolUse` mirror refresh hooks. Do not add them unless explicitly requested.
-- The legacy `AGENT.md` was read as migration input and is not the active standard. Because `.github/copilot-instructions.md` is the existing sole Copilot project configuration, keep it as the only Copilot location; do not create or maintain a second root `AGENTS.md` for Copilot.
+- Root `AGENTS.md` is the active Codex project guide. Keep Copilot-specific configuration only in `.github/copilot-instructions.md`; do not duplicate those instructions in the root guide.
 - Existing project AI guidance, API-first artifacts, and project hooks were upgraded or verified against the current init standard; this standard constrains future coding and does not authorize unrelated source refactors.
 
 ## Git

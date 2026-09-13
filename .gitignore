@@ -817,7 +817,7 @@ deploy/.wrangler/
 
 # dt:init project guidance and managed hooks
 !CLAUDE.md
-!AGENT.md
+!AGENTS.md
 !.github/copilot-instructions.md
 !docs/**/*.md
 !.claude/

@@ -50,7 +50,7 @@ reply, and delivery management system for Xianyu sellers.
 - Group related work in `docs/plan/<中文任务名>/`; put audit, performance, evaluation, and retrospective reports in `docs/reports/<中文报告主题>/`.
 - All new Git worktrees belong under the project `.worktree/<worktree-name>` directory, which is ignored by the root `.gitignore`.
 - If the project final-rule-audit hooks exist, finish by rereading rules, auditing modified files, and recording minimal verification. The current standard does not use `.ai/skills`, mirrors, `sync-project-skills.sh`, or `PostToolUse` refresh hooks.
-- Copilot project instructions are maintained only in `.github/copilot-instructions.md` because no root `AGENTS.md` existed at initialization.
+- Root `AGENTS.md` is the Codex project guide; Copilot-specific instructions remain only in `.github/copilot-instructions.md`.
 - This project normally uses local commits only; do not push to a remote, publish branches, create pull requests, or merge unless the user explicitly requests that separate operation. See `docs/references/ai-rules/04-本地提交策略.md`.
 - Before adding or changing an endpoint, search `.ai/index/backend-apis.json` with the tools under `.ai/tools/api-first/` and verify the source route, handler, schemas, flow, and auth boundary. See `docs/references/ai-rules/03-后端接口优先.md`.
 - Use concise Chinese Conventional Commit messages when committing, and never add AI attribution or a `Co-Authored-By` line.

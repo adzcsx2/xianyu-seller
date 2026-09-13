@@ -74,7 +74,7 @@ AI 回复配置也存在职责混合。`custom_prompts`、最大折扣比例、�
 | 来源 | 使用范围 | 结论 |
 | --- | --- | --- |
 | 本轮用户要求（2026-09-07） | 页面、全局范围、CRUD、权限、回复风格 | 最高优先级 |
-| `AGENT.md` 与 `docs/references/ai-rules/01～03` | 仓库边界、API-first、测试和文档规范 | 受保护工程规则 |
+| `AGENTS.md` 与 `docs/references/ai-rules/01～03` | 仓库边界、API-first、测试和文档规范 | 受保护工程规则 |
 | `app/knowledge/passistant_public_v1.json` | Passistant 当前公开事实与来源 | 迁移输入，不自动扩写 |
 | `app/db_manager.py`、`app/reply_server.py`、`app/product_knowledge.py`、`app/ai_reply_engine.py` | 当前 schema、API、检索和回复时序 | 实现现状 |
 | `frontend/components/KnowledgeBase.tsx`、`AIReply.tsx`、`AccountList.tsx` | 当前错误交互和重复配置入口 | 前端改造依据 |

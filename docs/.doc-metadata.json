@@ -16,7 +16,7 @@
     },
     "guide/PROJECT_OVERVIEW.md": {
       "updatedAt": "2026-09-10T21:10:23+08:00",
-      "sourceFiles": ["AGENT.md", "Start.py", "app/reply_server.py", "XianyuAutoAsync.py", "frontend/App.tsx"],
+      "sourceFiles": ["AGENTS.md", "Start.py", "app/reply_server.py", "XianyuAutoAsync.py", "frontend/App.tsx"],
       "lastCommit": "working-tree"
     },
     "modules/ARCHITECTURE.md": {

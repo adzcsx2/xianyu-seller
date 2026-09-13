@@ -98,7 +98,7 @@
 | 6 | `app/cookie_manager.py` | `CookieManager.instances`、`ensure_cookie_task`、线程安全调度 | HTTP 线程向账号事件循环应用开关的边界 |
 | 7 | 根 `README.md`、`frontend/App.tsx`、`Sidebar.tsx`、`About.tsx`、HTML 壳、Docker/Compose、工作流、公告与包元数据 | 当前名称、外链、作者、镜像和分发标识 | Phase 5 品牌盘点事实 |
 | 8 | `docs/testing/登录开关与人工滑块链路修复.tdd.md`、`docs/testing/MTOP浏览器指纹与人工滑块修复.tdd.md` | RED/GREEN、覆盖边界 | 人工验证、指纹一致性和重复刷新风险回归 |
-| 9 | `AGENT.md`、`CLAUDE.md`、`docs/references/ai-rules/01～03、05` | 架构、测试、API-first、接口目录 | 工程约束 |
+| 9 | `AGENTS.md`、`CLAUDE.md`、`docs/references/ai-rules/01～03、05` | 架构、测试、API-first、接口目录 | 工程约束 |
 
 接口索引因工作区中 `app/reply_server.py` 已有用户改动而 stale；计划生成时已重建到临时文件核验，未覆盖仓库索引。实施阶段应在代码稳定后正式重建接口索引和目录。
 

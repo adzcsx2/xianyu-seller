@@ -28,7 +28,7 @@
 - All new Git worktrees must use `<project-root>/.worktree/<worktree-name>`; the root `.gitignore` ignores `/.worktree/`.
 - If final-rule-audit hooks are present, reread applicable rules and audit modified files and minimal verification before replying; fix violations first. The current init standard does not use `.ai/skills`, mirrors, `sync-project-skills.sh`, or `PostToolUse` refresh hooks.
 - Copilot instructions are kept only here; do not also create or maintain a root `AGENTS.md` for Copilot configuration.
-- The legacy `AGENT.md` is migration input only and is not the active project rule source.
+- Root `AGENTS.md` is the active Codex project guide; Copilot-specific instructions remain in this file.
 - Do not commit secrets, runtime databases, logs, browser state, or user data. Do not change remotes or force-push without explicit authorization.
 - Use concise Chinese Conventional Commit messages when committing and never add AI attribution or a `Co-Authored-By` line.
 - No direct child Git repositories were detected during initialization; if that changes, keep child commits and indexes isolated from the root.
