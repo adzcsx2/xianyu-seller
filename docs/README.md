@@ -57,8 +57,12 @@ docs/
 ## 报告和测试证据
 
 - [文档更新日志](reports/CHANGELOG.md) - 文档变更摘要和详情链接。
-- [更新详情](update-list/update-2026-09-10.md) - 本次审计的证据矩阵与实际文档差异。
+- [更新详情（2026-09-13）](update-list/update-2026-09-13.md) - 本次审计的证据矩阵与实际文档差异。
+- [历史更新详情（2026-09-10）](update-list/update-2026-09-10.md) - 项目文档基线与 AI 安全边界记录。
 - [测试证据目录](testing/) - 功能修复、TDD 和自动化测试记录。
+- [知识库文档闭环 TDD 证据](testing/knowledge-base-ai-qa.tdd.md) - 知识库上传、导入、来源关系和问答依据的测试记录。
+- [系统日志增量刷新](testing/system-log-incremental-refresh.tdd.md) - 文件增量解析、分页和 30 秒刷新合同。
+- [日志保留七天](testing/日志保留七天.tdd.md) - 应用日志、验证码日志和测试产物保留策略的测试记录。
 - [计划目录](plan/) - 分阶段设计、执行和测试计划。
 
 ## 计划文档

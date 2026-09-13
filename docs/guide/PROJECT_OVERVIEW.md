@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-闲鱼卖家 1.1.0 是面向闲鱼卖家的本地多账号运营工作台，当前以前端自动 AI 聊天为核心，覆盖账号连接、商品、订单、消息、AI 回复、知识库、卡密、自动发货和运行日志。若使用阿奇索自动发货，可由阿奇索负责发货，本项目补充自动聊天能力。
+闲鱼卖家 1.1.0 是面向闲鱼卖家的本地多账号运营工作台，当前以前端自动 AI 聊天为核心，覆盖账号连接、商品、订单、消息、AI 回复、知识库、卡密、自动发货和运行日志。知识库支持本地 UTF-8 Markdown/TXT 文档的预览、按章节显式导入和问答依据核对；系统日志支持筛选、增量分页、自动刷新和七天保留。若使用阿奇索自动发货，可由阿奇索负责发货，本项目补充自动聊天能力。
 
 项目以本地部署为主：FastAPI 后端同时提供管理 API 和构建后的 React 单页应用，运行数据保存在本地 SQLite 与运行目录中。
 
@@ -11,7 +11,7 @@
 | 层次 | 技术与事实源 |
 | --- | --- |
 | 后端 | Python 3.11+、FastAPI、Uvicorn、Pydantic、SQLite |
-| 平台连接 | Playwright 1.60.0、Patchright 1.62.3、DrissionPage、WebSocket/HTTP 客户端 |
+| 平台连接 | Playwright 1.60.0、Patchright 1.62.3、DrissionPage、slidex、WebSocket/HTTP 客户端 |
 | 前端 | React 19、TypeScript、Vite、Axios、Recharts、Tailwind CSS |
 | 配置 | `.env`、`global_config.yml`、系统设置表 |
 | 测试 | Python `unittest`、Playwright headless、Coverage.py、TypeScript 检查和 detached Vite 构建 |
@@ -28,8 +28,8 @@
 
 | 路径 | 职责 |
 | --- | --- |
-| `app/` | FastAPI、数据库、认证、AI、知识库、功能开关和业务服务 |
-| `app/routers/`、`utils/` | 路由子模块与浏览器、风控、订单等复用能力 |
+| `app/` | FastAPI、数据库、认证、AI、知识库、日志收集、功能开关和业务服务 |
+| `app/routers/`、`utils/` | 路由子模块与浏览器、风控、订单、滑块和日志等复用能力 |
 | `frontend/` | React 页面、组件、API 客户端和构建脚本 |
 | `static/` | 后端直接服务的前端构建产物和上传图片 |
 | `tests/` | 单元、集成和 headless 浏览器测试 |
@@ -44,6 +44,7 @@
 - 后端以 `feature_disabled` 和认证/归属校验作为实际安全边界，前端隐藏不是授权控制。
 - 外部公告、AI 和商品详情服务默认不配置；只有部署者显式提供地址后才会发起请求。
 - AI 模型服务地址会在服务端校验协议、URL 部分、解析结果和重定向；密钥不应出现在日志、普通用户响应或文档中。
+- 滑块验证只有取得有效 `x5sec` Cookie 才会更新账号会话；日志和测试产物按本地策略保留，不应携带账号凭据或知识库正文。
 - 自动回复、自动发货和闲鱼账号操作受平台风控影响，必须使用测试账号验证。
 
 ## 典型使用链路

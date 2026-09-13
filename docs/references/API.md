@@ -5,7 +5,7 @@
 - 服务默认地址为 `http://localhost:8080`；前端使用同源请求。
 - 需要认证的接口使用 `Authorization: Bearer <session-token>`。
 - `/docs` 和 `/redoc` 提供 FastAPI 运行时文档；`.ai/index/backend-apis.json` 是源码检索索引。
-- 完整路径、handler、认证提示和 schema 以 [全量接口目录](ai-rules/05-全量接口目录.md) 与当前源码为准；当前源码索引包含 260 条路由，且因没有独立 OpenAPI JSON，部分 schema 仍需回到 handler 核验。
+- 完整路径、handler、认证提示和 schema 以 [全量接口目录](ai-rules/05-全量接口目录.md) 与当前源码为准；当前源码索引包含 252 条路由，且因没有独立 OpenAPI JSON，部分 schema 仍需回到 handler 核验。
 
 ## 入口接口
 
@@ -68,6 +68,16 @@
 | 管理与备份 | `/admin/*`、`/backup/*` | 管理数据、日志、备份导入导出；高风险操作需管理员或归属权限 |
 | 验证码与风控 | `/api/captcha/*`、`/api/risk-control/*` | 人工验证会话、截图、鼠标事件和风控状态 |
 
+## 系统日志接口
+
+| 方法 | 路径 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/logs` | 仅管理员 | 按最新记录向前返回分页日志；支持 `lines`（服务端限制最多 1000）、`offset`、`level`、`source`、`start_time` 和 `end_time`，响应包含 `total`、`limit`、`offset`、`has_more`。 |
+| `GET` | `/logs/stats` | 仅管理员 | 返回当前收集器中的总量、级别统计、来源统计、容量和日志文件位置。 |
+| `POST` | `/logs/clear` | 仅管理员 | 清空候选日志文件、内存缓冲和增量读取状态；操作不可恢复。 |
+
+`/logs` 的时间参数接受 ISO 8601 时间；开始时间晚于结束时间返回 `400`。日志正文中的多行 traceback 会并入首条记录，保留原始时间、级别和来源，避免刷新时拆成新的系统事件。
+
 ## 知识库文档闭环
 
 | 方法 | 路径 | 说明 |
@@ -80,6 +90,16 @@
 来源标题本身不代表文件已经上传。旧来源会返回 `metadata_only`，文档来源会返回解析/导入状态、关联条目数和运行时启用数。知识库问答与商品预览的 `provided_evidence` 只列出本次实际提供给 AI 的安全来源摘要，不包含原始正文、备注、本地路径或内部规则。
 
 知识库写操作使用聚合 `expected_version`。冲突响应在 `detail` 中提供稳定的 `error_code`，包括 `knowledge_version_conflict`、`knowledge_source_in_use`、`knowledge_document_in_use` 和 `knowledge_validation_error`。
+
+## 验证码与风控接口
+
+| 方法 | 路径 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `POST` | `/api/captcha/manual-session` | 已认证 + 账号归属 | 以表单启动人工验证；仅风控中的账号可用，`timeout` 会限制在 60～900 秒。成功后服务端清理旧挑战 Cookie、保存新 Cookie、尝试重启账号并解除风控状态。 |
+| `POST` | `/api/risk-control/{cookie_id}/fresh-captcha-url` | 已认证 + 账号归属 | 使用当前 Cookie 获取一次性新验证链接；若风控已解除则返回 `need_verify=false`。 |
+| `GET` | `/api/risk-control/status` | 已认证 | 返回当前用户账号的风控熔断、验证类型、冷却和人工验证状态。 |
+
+自动滑块结果只有包含有效 `x5sec` Cookie 才会写回账号；仅视觉通过、只有挑战标记或未返回 Cookie 都按失败处理，并提示人工验证。验证链接和 Cookie 属于实时账号数据，不应写入文档、日志或测试 fixture。
 
 ## 认证与错误边界
 
