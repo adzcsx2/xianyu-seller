@@ -62,6 +62,18 @@ class KnowledgeBindingConflict(RuntimeError):
 class KnowledgeSourceInUse(RuntimeError):
     """来源仍被事实、规则或问答引用。"""
 
+    def __init__(self, message: str, usage: Optional[Dict[str, Any]] = None):
+        self.usage = usage or {}
+        super().__init__(message)
+
+
+class KnowledgeDocumentInUse(RuntimeError):
+    """文档仍有关联条目。"""
+
+    def __init__(self, message: str, usage: Optional[Dict[str, Any]] = None):
+        self.usage = usage or {}
+        super().__init__(message)
+
 
 class MigrationPrecondition(RuntimeError):
     """全局知识迁移前置条件不满足。"""
@@ -521,13 +533,14 @@ class DBManager:
                 description TEXT NOT NULL DEFAULT '',
                 version INTEGER NOT NULL DEFAULT 1,
                 enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                schema_version INTEGER NOT NULL DEFAULT 2,
+                schema_version INTEGER NOT NULL DEFAULT 3,
                 seed_version TEXT,
                 checksum TEXT NOT NULL DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             ''')
+            cursor.execute("UPDATE ai_knowledge_bases SET schema_version=3 WHERE schema_version < 3")
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS ai_knowledge_facts (
                 id TEXT PRIMARY KEY,
@@ -556,10 +569,64 @@ class DBManager:
                 notes TEXT NOT NULL DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                source_kind TEXT NOT NULL DEFAULT 'manual',
+                document_id TEXT,
                 FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
                 UNIQUE(knowledge_base_id, source_key)
             )
             ''')
+            source_columns = {row[1] for row in cursor.execute("PRAGMA table_info(ai_knowledge_sources)")}
+            if "source_kind" not in source_columns:
+                cursor.execute("ALTER TABLE ai_knowledge_sources ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'manual'")
+            if "document_id" not in source_columns:
+                cursor.execute("ALTER TABLE ai_knowledge_sources ADD COLUMN document_id TEXT")
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_documents (
+                id TEXT PRIMARY KEY,
+                knowledge_base_id TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                media_type TEXT NOT NULL,
+                encoding TEXT NOT NULL DEFAULT 'utf-8',
+                byte_size INTEGER NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                parser_version TEXT NOT NULL DEFAULT 'text-sections-v1',
+                parse_status TEXT NOT NULL DEFAULT 'parsed',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (knowledge_base_id) REFERENCES ai_knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, content_sha256)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_document_sections (
+                id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL,
+                ordinal INTEGER NOT NULL,
+                heading_path TEXT NOT NULL DEFAULT '',
+                anchor TEXT NOT NULL,
+                content TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                FOREIGN KEY (document_id) REFERENCES ai_knowledge_documents(id) ON DELETE CASCADE,
+                UNIQUE(document_id, ordinal),
+                UNIQUE(document_id, anchor)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_knowledge_document_imports (
+                document_id TEXT NOT NULL,
+                section_id TEXT NOT NULL,
+                target_kind TEXT NOT NULL DEFAULT 'facts',
+                target_id TEXT NOT NULL,
+                imported_content_sha256 TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(document_id, section_id),
+                UNIQUE(target_kind, target_id),
+                FOREIGN KEY (document_id) REFERENCES ai_knowledge_documents(id) ON DELETE CASCADE,
+                FOREIGN KEY (section_id) REFERENCES ai_knowledge_document_sections(id) ON DELETE CASCADE
+            )
+            ''')
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_knowledge_sources_document ON ai_knowledge_sources(document_id) WHERE document_id IS NOT NULL")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_documents_base ON ai_knowledge_documents(knowledge_base_id, created_at)")
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS ai_knowledge_rules (
                 id TEXT PRIMARY KEY,
@@ -5715,6 +5782,8 @@ class DBManager:
                 "id": row[0], "knowledge_base_id": row[1], "source_key": row[2],
                 "title": row[3], "reference": row[4], "url": row[5], "notes": row[6],
                 "created_at": row[7], "updated_at": row[8],
+                "source_kind": row[9] if len(row) > 9 else "manual",
+                "document_id": row[10] if len(row) > 10 else None,
             }
         if kind == "rules":
             matchers = cls._knowledge_list(row[6])
@@ -6001,7 +6070,8 @@ class DBManager:
                        (SELECT COUNT(*) FROM ai_knowledge_sources s WHERE s.knowledge_base_id=b.id),
                        (SELECT COUNT(*) FROM ai_knowledge_rules r WHERE r.knowledge_base_id=b.id),
                        (SELECT COUNT(*) FROM ai_knowledge_qa_entries q WHERE q.knowledge_base_id=b.id),
-                       (SELECT COUNT(*) FROM ai_item_knowledge_bindings x WHERE x.knowledge_base_id=b.id)
+                       (SELECT COUNT(*) FROM ai_item_knowledge_bindings x WHERE x.knowledge_base_id=b.id),
+                       (SELECT COUNT(*) FROM ai_knowledge_documents d WHERE d.knowledge_base_id=b.id)
                        FROM ai_knowledge_bases b"""
             params = []
             if enabled_only:
@@ -6015,7 +6085,7 @@ class DBManager:
                     "version": int(row[4]), "enabled": bool(row[5]), "schema_version": int(row[6]),
                     "seed_version": row[7], "checksum": row[8] or "", "created_at": row[9], "updated_at": row[10],
                     "fact_count": int(row[11]), "source_count": int(row[12]), "rule_count": int(row[13]),
-                    "qa_count": int(row[14]), "binding_count": int(row[15]),
+                    "qa_count": int(row[14]), "binding_count": int(row[15]), "document_count": int(row[16]),
                 })
             return result
 
@@ -6032,11 +6102,22 @@ class DBManager:
                 result["sources"] = self._list_knowledge_content_locked(cursor, "sources", base_id)
                 result["rules"] = self._list_knowledge_content_locked(cursor, "rules", base_id)
                 result["qa_entries"] = self._list_knowledge_content_locked(cursor, "qa_entries", base_id)
+                for source in result["sources"]:
+                    source.update(self._knowledge_source_usage_locked(cursor, base_id, source["id"]))
+                    if source.get("document_id"):
+                        cursor.execute("SELECT * FROM ai_knowledge_documents WHERE id=? AND knowledge_base_id=?", (source["document_id"], base_id))
+                        document_row = cursor.fetchone()
+                        source["document_status"] = self._knowledge_document_dict_locked(cursor, document_row, include_sections=False)["status"] if document_row else "missing"
+                    else:
+                        source["document_status"] = "metadata_only"
+                result["documents"] = self.list_knowledge_documents(base_id)
             for field, table in (("fact_count", "ai_knowledge_facts"), ("source_count", "ai_knowledge_sources"), ("rule_count", "ai_knowledge_rules"), ("qa_count", "ai_knowledge_qa_entries")):
                 cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE knowledge_base_id = ?", (base_id,))
                 result[field] = int(cursor.fetchone()[0] or 0)
             cursor.execute("SELECT COUNT(*) FROM ai_item_knowledge_bindings WHERE knowledge_base_id = ?", (base_id,))
             result["binding_count"] = int(cursor.fetchone()[0] or 0)
+            cursor.execute("SELECT COUNT(*) FROM ai_knowledge_documents WHERE knowledge_base_id = ?", (base_id,))
+            result["document_count"] = int(cursor.fetchone()[0] or 0)
             return result
 
     def update_knowledge_base(self, base_id: str, values: Dict[str, Any], *, expected_version: int) -> Dict[str, Any]:
@@ -6067,7 +6148,13 @@ class DBManager:
                 row = self._get_knowledge_base_row(cursor, base_id)
                 if expected_version != int(row[4]): raise KnowledgeVersionConflict(expected_version, int(row[4]))
                 cursor.execute("SELECT COUNT(*) FROM ai_item_knowledge_bindings WHERE knowledge_base_id=?", (base_id,)); binding_count = int(cursor.fetchone()[0] or 0)
+                cursor.execute("SELECT id FROM ai_knowledge_documents WHERE knowledge_base_id=?", (base_id,))
+                document_ids = [item[0] for item in cursor.fetchall()]
+                for document_id in document_ids:
+                    cursor.execute("DELETE FROM ai_knowledge_document_imports WHERE document_id=?", (document_id,))
+                    cursor.execute("DELETE FROM ai_knowledge_document_sections WHERE document_id=?", (document_id,))
                 for table in self._KNOWLEDGE_CONTENT_TABLES.values(): cursor.execute(f"DELETE FROM {table} WHERE knowledge_base_id=?", (base_id,))
+                cursor.execute("DELETE FROM ai_knowledge_documents WHERE knowledge_base_id=?", (base_id,))
                 cursor.execute("DELETE FROM ai_item_knowledge_bindings WHERE knowledge_base_id=?", (base_id,))
                 cursor.execute("DELETE FROM ai_knowledge_bases WHERE id=?", (base_id,))
                 if cursor.rowcount != 1: raise KnowledgeNotFound("knowledge base not found")
@@ -6180,14 +6267,285 @@ class DBManager:
                 cursor.execute(f"SELECT * FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id)); row = cursor.fetchone()
                 if not row: raise KnowledgeNotFound("knowledge content not found")
                 if kind == "sources":
+                    source = self._knowledge_content_dict(kind, row)
+                    if source.get("document_id"):
+                        raise KnowledgeDocumentInUse(
+                            "document-backed sources must be deleted through the document endpoint",
+                            self._knowledge_source_usage_locked(cursor, base_id, content_id),
+                        )
                     for ref_table in ("ai_knowledge_facts", "ai_knowledge_rules", "ai_knowledge_qa_entries"):
                         cursor.execute(f"SELECT source_ids FROM {ref_table} WHERE knowledge_base_id=?", (base_id,))
                         if any(content_id in self._knowledge_list(r[0]) for r in cursor.fetchall()):
-                            raise KnowledgeSourceInUse("source is still referenced")
-                cursor.execute(f"DELETE FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id)); self._bump_knowledge_base(cursor, base_id, expected_version); self.conn.commit()
+                            raise KnowledgeSourceInUse(
+                                "source is still referenced",
+                                self._knowledge_source_usage_locked(cursor, base_id, content_id),
+                            )
+                cursor.execute(f"DELETE FROM {table} WHERE id=? AND knowledge_base_id=?", (content_id, base_id))
+                if kind == "facts":
+                    cursor.execute(
+                        "DELETE FROM ai_knowledge_document_imports WHERE target_kind='facts' AND target_id=?",
+                        (content_id,),
+                    )
+                self._bump_knowledge_base(cursor, base_id, expected_version); self.conn.commit()
                 return {"id": content_id, "deleted": True, "version": self._get_knowledge_base_row(cursor, base_id)[4]}
             except Exception:
                 self.conn.rollback(); raise
+
+    def _knowledge_source_usage_locked(self, cursor, base_id: str, source_id: str) -> Dict[str, Any]:
+        usage = []
+        definitions = (
+            ("fact", "ai_knowledge_facts", "title", "fact_key", 8),
+            ("rule", "ai_knowledge_rules", "name", "rule_key", 12),
+            ("qa", "ai_knowledge_qa_entries", "answer", "qa_key", 9),
+        )
+        for kind, table, label_column, key_column, enabled_index in definitions:
+            cursor.execute(f"SELECT * FROM {table} WHERE knowledge_base_id=?", (base_id,))
+            for row in cursor.fetchall():
+                item = self._knowledge_content_dict(
+                    "qa_entries" if kind == "qa" else f"{kind}s", row
+                )
+                if source_id not in item.get("source_ids", []):
+                    continue
+                label = item.get(label_column) or item.get(key_column) or item["id"]
+                usage.append({
+                    "kind": kind,
+                    "content_id": item["id"],
+                    "label": str(label)[:200],
+                    "enabled": bool(item.get("enabled", True)),
+                })
+        usage.sort(key=lambda value: (value["kind"], value["label"], value["content_id"]))
+        return {
+            "linked_entry_count": len(usage),
+            "runtime_enabled_count": sum(1 for item in usage if item["enabled"]),
+            "usage": usage,
+        }
+
+    def get_knowledge_source_usage(self, base_id: str, source_id: str) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            self._get_knowledge_base_row(cursor, base_id)
+            cursor.execute("SELECT 1 FROM ai_knowledge_sources WHERE id=? AND knowledge_base_id=?", (source_id, base_id))
+            if not cursor.fetchone():
+                raise KnowledgeNotFound("knowledge source not found")
+            return self._knowledge_source_usage_locked(cursor, base_id, source_id)
+
+    def _knowledge_document_dict_locked(self, cursor, row, *, include_sections: bool) -> Dict[str, Any]:
+        document_id, base_id = row[0], row[1]
+        cursor.execute("SELECT id FROM ai_knowledge_sources WHERE document_id=? AND knowledge_base_id=?", (document_id, base_id))
+        source_row = cursor.fetchone()
+        source_id = source_row[0] if source_row else None
+        usage = self._knowledge_source_usage_locked(cursor, base_id, source_id) if source_id else {
+            "linked_entry_count": 0, "runtime_enabled_count": 0, "usage": []
+        }
+        cursor.execute("SELECT COUNT(*) FROM ai_knowledge_document_sections WHERE document_id=?", (document_id,))
+        section_count = int(cursor.fetchone()[0] or 0)
+        cursor.execute("SELECT section_id FROM ai_knowledge_document_imports WHERE document_id=?", (document_id,))
+        imported_section_ids = {item[0] for item in cursor.fetchall()}
+        import_count = len(imported_section_ids)
+        status = "parsed" if import_count == 0 else "imported" if import_count == section_count else "partially_imported"
+        result = {
+            "id": document_id,
+            "knowledge_base_id": base_id,
+            "source_id": source_id,
+            "original_filename": row[2],
+            "media_type": row[3],
+            "encoding": row[4],
+            "byte_size": int(row[5]),
+            "content_sha256": row[6],
+            "parser_version": row[7],
+            "status": status,
+            "section_count": section_count,
+            "imported_section_count": import_count,
+            "created_at": row[9],
+            "updated_at": row[10],
+            **usage,
+        }
+        if include_sections:
+            cursor.execute(
+                "SELECT id, ordinal, heading_path, anchor, content, content_sha256 FROM ai_knowledge_document_sections WHERE document_id=? ORDER BY ordinal",
+                (document_id,),
+            )
+            result["sections"] = [
+                {
+                    "id": section[0], "ordinal": int(section[1]),
+                    "heading_path": section[2], "anchor": section[3],
+                    "content": section[4], "content_sha256": section[5],
+                    "imported": section[0] in imported_section_ids,
+                }
+                for section in cursor.fetchall()
+            ]
+        return result
+
+    def list_knowledge_documents(self, base_id: str) -> List[Dict[str, Any]]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            self._get_knowledge_base_row(cursor, base_id)
+            cursor.execute("SELECT * FROM ai_knowledge_documents WHERE knowledge_base_id=? ORDER BY created_at, id", (base_id,))
+            return [self._knowledge_document_dict_locked(cursor, row, include_sections=False) for row in cursor.fetchall()]
+
+    def get_knowledge_document(self, base_id: str, document_id: str) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            self._get_knowledge_base_row(cursor, base_id)
+            cursor.execute("SELECT * FROM ai_knowledge_documents WHERE id=? AND knowledge_base_id=?", (document_id, base_id))
+            row = cursor.fetchone()
+            if not row:
+                raise KnowledgeNotFound("knowledge document not found")
+            return self._knowledge_document_dict_locked(cursor, row, include_sections=True)
+
+    def create_knowledge_document(self, base_id: str, filename: str, content: bytes, *, expected_version: int) -> Dict[str, Any]:
+        from app.knowledge_documents import KnowledgeDocumentParser
+
+        parsed = KnowledgeDocumentParser.parse_bytes(filename, content)
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                base_row = self._get_knowledge_base_row(cursor, base_id)
+                current_version = int(base_row[4])
+                if expected_version != current_version:
+                    raise KnowledgeVersionConflict(expected_version, current_version)
+                cursor.execute(
+                    "SELECT * FROM ai_knowledge_documents WHERE knowledge_base_id=? AND content_sha256=?",
+                    (base_id, parsed.content_sha256),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    return {
+                        "document": self._knowledge_document_dict_locked(cursor, existing, include_sections=True),
+                        "duplicate": True,
+                        "version": current_version,
+                    }
+                cursor.execute("SELECT COUNT(*) FROM ai_knowledge_sources WHERE knowledge_base_id=?", (base_id,))
+                if int(cursor.fetchone()[0] or 0) >= 200:
+                    raise ValueError("sources can contain at most 200 entries")
+                total = 0
+                for table in self._KNOWLEDGE_CONTENT_TABLES.values():
+                    cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE knowledge_base_id=?", (base_id,))
+                    total += int(cursor.fetchone()[0] or 0)
+                if total >= 500:
+                    raise ValueError("knowledge base can contain at most 500 entries")
+                document_id = self._new_knowledge_id()
+                source_id = self._new_knowledge_id()
+                cursor.execute(
+                    "INSERT INTO ai_knowledge_documents(id,knowledge_base_id,original_filename,media_type,byte_size,content_sha256) VALUES (?,?,?,?,?,?)",
+                    (document_id, base_id, parsed.filename, parsed.media_type, parsed.byte_size, parsed.content_sha256),
+                )
+                for section in parsed.sections:
+                    cursor.execute(
+                        "INSERT INTO ai_knowledge_document_sections(id,document_id,ordinal,heading_path,anchor,content,content_sha256) VALUES (?,?,?,?,?,?,?)",
+                        (self._new_knowledge_id(), document_id, section.ordinal, section.heading_path, section.anchor, section.content, section.content_sha256),
+                    )
+                source_key = f"document-{parsed.content_sha256[:12]}"
+                cursor.execute(
+                    "INSERT INTO ai_knowledge_sources(id,knowledge_base_id,source_key,title,reference,url,notes,source_kind,document_id) VALUES (?,?,?,?,?,'','', 'document', ?)",
+                    (source_id, base_id, source_key, parsed.filename, "上传文档", document_id),
+                )
+                version = self._bump_knowledge_base(cursor, base_id, expected_version)
+                self.conn.commit()
+                cursor.execute("SELECT * FROM ai_knowledge_documents WHERE id=?", (document_id,))
+                return {
+                    "document": self._knowledge_document_dict_locked(cursor, cursor.fetchone(), include_sections=True),
+                    "duplicate": False,
+                    "version": version,
+                }
+            except sqlite3.IntegrityError as exc:
+                self.conn.rollback()
+                raise KnowledgeBaseKeyConflict("knowledge document conflict") from exc
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    def import_knowledge_document_sections(self, base_id: str, document_id: str, section_ids: List[str], *, expected_version: int) -> Dict[str, Any]:
+        ids = list(section_ids or [])
+        if not ids or len(ids) != len(set(ids)):
+            raise ValueError("section_ids must contain unique values")
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                base_row = self._get_knowledge_base_row(cursor, base_id)
+                if expected_version != int(base_row[4]):
+                    raise KnowledgeVersionConflict(expected_version, int(base_row[4]))
+                cursor.execute("SELECT * FROM ai_knowledge_documents WHERE id=? AND knowledge_base_id=?", (document_id, base_id))
+                document = cursor.fetchone()
+                if not document:
+                    raise KnowledgeNotFound("knowledge document not found")
+                cursor.execute("SELECT id FROM ai_knowledge_sources WHERE document_id=? AND knowledge_base_id=?", (document_id, base_id))
+                source = cursor.fetchone()
+                if not source:
+                    raise KnowledgeNotFound("knowledge document source not found")
+                placeholders = ",".join("?" for _ in ids)
+                cursor.execute(
+                    f"SELECT id,ordinal,heading_path,content,content_sha256 FROM ai_knowledge_document_sections WHERE document_id=? AND id IN ({placeholders}) ORDER BY ordinal",
+                    [document_id, *ids],
+                )
+                sections = cursor.fetchall()
+                if {row[0] for row in sections} != set(ids):
+                    raise KnowledgeNotFound("knowledge document section not found")
+                cursor.execute(
+                    f"SELECT section_id FROM ai_knowledge_document_imports WHERE document_id=? AND section_id IN ({placeholders})",
+                    [document_id, *ids],
+                )
+                if cursor.fetchall():
+                    raise KnowledgeBaseKeyConflict("knowledge document section already imported")
+                cursor.execute("SELECT COUNT(*) FROM ai_knowledge_facts WHERE knowledge_base_id=?", (base_id,))
+                if int(cursor.fetchone()[0] or 0) + len(sections) > 200:
+                    raise ValueError("facts can contain at most 200 entries")
+                total = 0
+                for table in self._KNOWLEDGE_CONTENT_TABLES.values():
+                    cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE knowledge_base_id=?", (base_id,))
+                    total += int(cursor.fetchone()[0] or 0)
+                if total + len(sections) > 500:
+                    raise ValueError("knowledge base can contain at most 500 entries")
+                created = []
+                for section_id, ordinal, heading, section_content, section_checksum in sections:
+                    fact_id = self._new_knowledge_id()
+                    fact_key = f"doc-{document[6][:12]}-{int(ordinal)}"
+                    cursor.execute(
+                        "INSERT INTO ai_knowledge_facts(id,knowledge_base_id,fact_key,category,title,content,source_ids,priority,enabled) VALUES (?,?,?,?,?,?,?,?,1)",
+                        (fact_id, base_id, fact_key, "document", heading, section_content, self._knowledge_encode([source[0]]), 0),
+                    )
+                    cursor.execute(
+                        "INSERT INTO ai_knowledge_document_imports(document_id,section_id,target_kind,target_id,imported_content_sha256) VALUES (?,?,'facts',?,?)",
+                        (document_id, section_id, fact_id, section_checksum),
+                    )
+                    created.append(fact_id)
+                version = self._bump_knowledge_base(cursor, base_id, expected_version)
+                self.conn.commit()
+                return {"document_id": document_id, "imported_fact_ids": created, "version": version}
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    def delete_knowledge_document(self, base_id: str, document_id: str, *, expected_version: int, delete_imported: bool = False) -> Dict[str, Any]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                base_row = self._get_knowledge_base_row(cursor, base_id)
+                if expected_version != int(base_row[4]):
+                    raise KnowledgeVersionConflict(expected_version, int(base_row[4]))
+                cursor.execute("SELECT id FROM ai_knowledge_sources WHERE document_id=? AND knowledge_base_id=?", (document_id, base_id))
+                source = cursor.fetchone()
+                if not source:
+                    raise KnowledgeNotFound("knowledge document not found")
+                usage = self._knowledge_source_usage_locked(cursor, base_id, source[0])
+                cursor.execute("SELECT target_id FROM ai_knowledge_document_imports WHERE document_id=?", (document_id,))
+                imported_ids = {row[0] for row in cursor.fetchall()}
+                manual_usage = [item for item in usage["usage"] if item["content_id"] not in imported_ids]
+                if manual_usage or (imported_ids and not delete_imported):
+                    raise KnowledgeDocumentInUse("knowledge document is still referenced", usage)
+                if imported_ids:
+                    placeholders = ",".join("?" for _ in imported_ids)
+                    cursor.execute(f"DELETE FROM ai_knowledge_facts WHERE id IN ({placeholders})", list(imported_ids))
+                cursor.execute("DELETE FROM ai_knowledge_document_imports WHERE document_id=?", (document_id,))
+                cursor.execute("DELETE FROM ai_knowledge_sources WHERE id=?", (source[0],))
+                cursor.execute("DELETE FROM ai_knowledge_document_sections WHERE document_id=?", (document_id,))
+                cursor.execute("DELETE FROM ai_knowledge_documents WHERE id=? AND knowledge_base_id=?", (document_id, base_id))
+                version = self._bump_knowledge_base(cursor, base_id, expected_version)
+                self.conn.commit()
+                return {"id": document_id, "deleted": True, "version": version}
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def create_knowledge_fact(self, base_id, values, *, expected_version): return self._create_knowledge_content("facts", base_id, values, expected_version)
     def update_knowledge_fact(self, base_id, content_id, values, *, expected_version): return self._update_knowledge_content("facts", base_id, content_id, values, expected_version)
@@ -6298,7 +6656,7 @@ class DBManager:
                 cursor.execute("SELECT id FROM ai_knowledge_bases WHERE base_key='passistant'")
                 if cursor.fetchone(): raise MigrationPrecondition("passistant base key already exists without migration marker")
                 base_id = self._new_knowledge_id()
-                cursor.execute("INSERT INTO ai_knowledge_bases(id,base_key,name,description,version,enabled,schema_version,seed_version,checksum) VALUES (?,?,?,?,1,1,2,?,?)",
+                cursor.execute("INSERT INTO ai_knowledge_bases(id,base_key,name,description,version,enabled,schema_version,seed_version,checksum) VALUES (?,?,?,?,1,1,3,?,?)",
                                (base_id, "passistant", "Passistant", v2.get("description", ""), v2.get("seed_version", "passistant-global-v2"), details_checksum))
                 source_ids = {}
                 refs = []

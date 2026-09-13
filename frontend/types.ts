@@ -603,6 +603,7 @@ export interface KnowledgeBaseSummary {
   rule_count: number;
   qa_count: number;
   binding_count: number;
+  document_count: number;
 }
 
 export interface KnowledgeFact {
@@ -624,6 +625,47 @@ export interface KnowledgeSource {
   reference: string;
   url: string;
   notes: string;
+  source_kind?: 'manual' | 'document';
+  document_id?: string | null;
+  document_status?: 'metadata_only' | 'parsed' | 'partially_imported' | 'imported' | 'missing';
+  linked_entry_count?: number;
+  runtime_enabled_count?: number;
+  usage?: KnowledgeUsage[];
+}
+export interface KnowledgeUsage {
+  kind: 'fact' | 'rule' | 'qa';
+  content_id: string;
+  label: string;
+  enabled: boolean;
+}
+export interface KnowledgeDocumentSection {
+  id: string;
+  ordinal: number;
+  heading_path: string;
+  anchor: string;
+  content: string;
+  content_sha256: string;
+  imported: boolean;
+}
+export interface KnowledgeDocument {
+  id: string;
+  knowledge_base_id: string;
+  source_id: string;
+  original_filename: string;
+  media_type: string;
+  byte_size: number;
+  status: 'parsed' | 'partially_imported' | 'imported';
+  section_count: number;
+  imported_section_count: number;
+  linked_entry_count: number;
+  runtime_enabled_count: number;
+  sections?: KnowledgeDocumentSection[];
+}
+export interface KnowledgeEvidence {
+  content_type: 'fact' | 'qa';
+  content_key: string;
+  source_title: string;
+  document_status: string;
 }
 export interface KnowledgeRule {
   id: string;
@@ -657,6 +699,7 @@ export interface KnowledgeBaseDetail extends KnowledgeBaseSummary {
   sources: KnowledgeSource[];
   rules: KnowledgeRule[];
   qa_entries: KnowledgeQAEntry[];
+  documents: KnowledgeDocument[];
 }
 export interface KnowledgeBinding {
   cookie_id: string;
@@ -676,6 +719,7 @@ export interface KnowledgeBaseAnswer {
   knowledge_base_name: string;
   model_name: string;
   answer: string;
+  provided_evidence: KnowledgeEvidence[];
 }
 
 export interface ProductKnowledgeEntry {
@@ -712,6 +756,7 @@ export interface KnowledgePreviewResult {
   matches: KnowledgePreviewMatch[];
   match_count: number;
   used_characters: number;
+  provided_evidence?: KnowledgeEvidence[];
 }
 
 // Default Reply

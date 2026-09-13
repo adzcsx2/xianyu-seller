@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-09-10T11:15:59.3021166Z",
+  "generated_at_utc": "2026-09-12T19:29:31.0155199Z",
   "metadata": {
-    "route_count": 255,
+    "route_count": 252,
     "sources": [
       {
         "path": "app/api_captcha_remote.py",
@@ -10,7 +10,7 @@
       },
       {
         "path": "app/reply_server.py",
-        "sha256": "50d7066caf70f55b68603c0a94480cdda057822d34c955a7c136bc8426a6fe56"
+        "sha256": "c04e39aedc52cd5cd99cf5eea220db55097ae12ac8e806ae2844ee4d60e2d3c6"
       },
       {
         "path": "app/routers/delivery_block.py",
@@ -39,7 +39,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 642
+          "line": 729
         }
       ]
     },
@@ -60,7 +60,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10297
+          "line": 10566
         }
       ]
     },
@@ -81,7 +81,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7927
+          "line": 8196
         }
       ]
     },
@@ -102,7 +102,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8074
+          "line": 8343
         }
       ]
     },
@@ -123,7 +123,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7964
+          "line": 8233
         }
       ]
     },
@@ -144,7 +144,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7428
+          "line": 7697
         }
       ]
     },
@@ -165,7 +165,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8215
+          "line": 8484
         }
       ]
     },
@@ -186,7 +186,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8137
+          "line": 8406
         }
       ]
     },
@@ -207,7 +207,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8175
+          "line": 8444
         }
       ]
     },
@@ -228,7 +228,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7540
+          "line": 7809
         }
       ]
     },
@@ -249,7 +249,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7477
+          "line": 7746
         }
       ]
     },
@@ -270,7 +270,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7582
+          "line": 7851
         }
       ]
     },
@@ -291,7 +291,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8118
+          "line": 8387
         }
       ]
     },
@@ -312,7 +312,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7398
+          "line": 7667
         }
       ]
     },
@@ -333,7 +333,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7633
+          "line": 7902
         }
       ]
     },
@@ -354,7 +354,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7337
+          "line": 7606
         }
       ]
     },
@@ -375,7 +375,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7366
+          "line": 7635
         }
       ]
     },
@@ -396,7 +396,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4210
+          "line": 4299
         }
       ]
     },
@@ -417,7 +417,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6863
+          "line": 7115
         }
       ]
     },
@@ -438,7 +438,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6787
+          "line": 7039
         }
       ]
     },
@@ -459,7 +459,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6811
+          "line": 7063
         }
       ]
     },
@@ -480,7 +480,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6492
+          "line": 6744
         }
       ]
     },
@@ -501,7 +501,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6498
+          "line": 6750
         }
       ]
     },
@@ -524,7 +524,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6885
+          "line": 7137
         }
       ]
     },
@@ -545,7 +545,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7689
+          "line": 7958
         }
       ]
     },
@@ -566,7 +566,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7733
+          "line": 8002
         }
       ]
     },
@@ -587,7 +587,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9538
+          "line": 9807
         }
       ]
     },
@@ -629,7 +629,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9768
+          "line": 10037
         }
       ]
     },
@@ -776,7 +776,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 931
+          "line": 1018
         }
       ]
     },
@@ -797,7 +797,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3632
+          "line": 3721
         }
       ]
     },
@@ -818,7 +818,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3620
+          "line": 3709
         }
       ]
     },
@@ -839,7 +839,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3626
+          "line": 3715
         }
       ]
     },
@@ -860,7 +860,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3638
+          "line": 3727
         }
       ]
     },
@@ -881,7 +881,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10090
+          "line": 10359
         }
       ]
     },
@@ -902,7 +902,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8312
+          "line": 8581
         }
       ]
     },
@@ -923,7 +923,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8478
+          "line": 8747
         }
       ]
     },
@@ -944,7 +944,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8449
+          "line": 8718
         }
       ]
     },
@@ -965,7 +965,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8623
+          "line": 8892
         }
       ]
     },
@@ -986,7 +986,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10176
+          "line": 10445
         }
       ]
     },
@@ -1007,7 +1007,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10149
+          "line": 10418
         }
       ]
     },
@@ -1028,7 +1028,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8514
+          "line": 8783
         }
       ]
     },
@@ -1049,7 +1049,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9657
+          "line": 9926
         }
       ]
     },
@@ -1070,7 +1070,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10204
+          "line": 10473
         }
       ]
     },
@@ -1091,7 +1091,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9369
+          "line": 9638
         }
       ]
     },
@@ -1112,7 +1112,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8974
+          "line": 9243
         }
       ]
     },
@@ -1133,7 +1133,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 10239
+          "line": 10508
         }
       ]
     },
@@ -1154,7 +1154,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8775
+          "line": 9044
         }
       ]
     },
@@ -1175,7 +1175,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8389
+          "line": 8658
         }
       ]
     },
@@ -1196,7 +1196,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9576
+          "line": 9845
         }
       ]
     },
@@ -1217,7 +1217,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9893
+          "line": 10162
         }
       ]
     },
@@ -1238,7 +1238,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9985
+          "line": 10254
         }
       ]
     },
@@ -1259,7 +1259,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8388
+          "line": 8657
         }
       ]
     },
@@ -1282,7 +1282,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8421
+          "line": 8690
         }
       ]
     },
@@ -1303,7 +1303,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3990
+          "line": 4079
         }
       ]
     },
@@ -1324,7 +1324,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5842
+          "line": 5931
         }
       ]
     },
@@ -1345,7 +1345,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5868
+          "line": 5957
         }
       ]
     },
@@ -1454,7 +1454,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5218
+          "line": 5307
         }
       ]
     },
@@ -1475,7 +1475,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5230
+          "line": 5319
         }
       ]
     },
@@ -1496,7 +1496,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5536
+          "line": 5625
         }
       ]
     },
@@ -1517,7 +1517,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5272
+          "line": 5361
         }
       ]
     },
@@ -1538,7 +1538,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5289
+          "line": 5378
         }
       ]
     },
@@ -1559,7 +1559,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5330
+          "line": 5419
         }
       ]
     },
@@ -1580,7 +1580,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 877
+          "line": 964
         }
       ]
     },
@@ -1601,7 +1601,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 901
+          "line": 988
         }
       ]
     },
@@ -1622,7 +1622,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1530
+          "line": 1617
         }
       ]
     },
@@ -1643,7 +1643,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1550
+          "line": 1637
         }
       ]
     },
@@ -1664,7 +1664,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1592
+          "line": 1679
         }
       ]
     },
@@ -1685,7 +1685,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1645
+          "line": 1732
         }
       ]
     },
@@ -1706,7 +1706,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2243
+          "line": 2330
         }
       ]
     },
@@ -1727,7 +1727,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2288
+          "line": 2375
         }
       ]
     },
@@ -1748,7 +1748,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1992
+          "line": 2079
         }
       ]
     },
@@ -1769,7 +1769,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2048
+          "line": 2135
         }
       ]
     },
@@ -1790,7 +1790,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4395
+          "line": 4484
         }
       ]
     },
@@ -1811,7 +1811,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2198
+          "line": 2285
         }
       ]
     },
@@ -1832,7 +1832,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4462
+          "line": 4551
         }
       ]
     },
@@ -1855,7 +1855,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4428
+          "line": 4517
         }
       ]
     },
@@ -1878,7 +1878,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2133
+          "line": 2220
         }
       ]
     },
@@ -1899,7 +1899,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4581
+          "line": 4670
         }
       ]
     },
@@ -1922,7 +1922,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4547
+          "line": 4636
         }
       ]
     },
@@ -1943,7 +1943,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2163
+          "line": 2250
         }
       ]
     },
@@ -1964,7 +1964,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4518
+          "line": 4607
         }
       ]
     },
@@ -1987,7 +1987,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4488
+          "line": 4577
         }
       ]
     },
@@ -2008,7 +2008,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3487
+          "line": 3576
         }
       ]
     },
@@ -2029,7 +2029,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6179
+          "line": 6268
         }
       ]
     },
@@ -2050,7 +2050,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2004
+          "line": 2091
         }
       ]
     },
@@ -2071,7 +2071,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5189
+          "line": 5278
         }
       ]
     },
@@ -2092,7 +2092,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3555
+          "line": 3644
         }
       ]
     },
@@ -2113,7 +2113,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3572
+          "line": 3661
         }
       ]
     },
@@ -2134,7 +2134,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3511
+          "line": 3600
         }
       ]
     },
@@ -2155,7 +2155,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3534
+          "line": 3623
         }
       ]
     },
@@ -2176,7 +2176,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3596
+          "line": 3685
         }
       ]
     },
@@ -2262,7 +2262,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5434
+          "line": 5523
         }
       ]
     },
@@ -2283,7 +2283,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5446
+          "line": 5535
         }
       ]
     },
@@ -2304,7 +2304,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5567
+          "line": 5656
         }
       ]
     },
@@ -2325,7 +2325,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5487
+          "line": 5576
         }
       ]
     },
@@ -2346,7 +2346,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5504
+          "line": 5593
         }
       ]
     },
@@ -2367,7 +2367,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2933
+          "line": 3022
         }
       ]
     },
@@ -2388,7 +2388,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2856
+          "line": 2945
         }
       ]
     },
@@ -2409,7 +2409,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4118
+          "line": 4207
         }
       ]
     },
@@ -2430,7 +2430,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4125
+          "line": 4214
         }
       ]
     },
@@ -2453,7 +2453,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1081
+          "line": 1168
         }
       ]
     },
@@ -2476,7 +2476,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1138
+          "line": 1225
         }
       ]
     },
@@ -2497,7 +2497,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 958
+          "line": 1045
         }
       ]
     },
@@ -2518,7 +2518,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 574
+          "line": 661
         }
       ]
     },
@@ -2539,7 +2539,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6029
+          "line": 6118
         }
       ]
     },
@@ -2560,7 +2560,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7843
+          "line": 8112
         }
       ]
     },
@@ -2581,7 +2581,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7897
+          "line": 8166
         }
       ]
     },
@@ -2602,7 +2602,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7810
+          "line": 8079
         }
       ]
     },
@@ -2625,7 +2625,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7873
+          "line": 8142
         }
       ]
     },
@@ -2646,7 +2646,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7773
+          "line": 8042
         }
       ]
     },
@@ -2667,7 +2667,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7791
+          "line": 8060
         }
       ]
     },
@@ -2688,7 +2688,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5928
+          "line": 6017
         }
       ]
     },
@@ -2711,7 +2711,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5957
+          "line": 6046
         }
       ]
     },
@@ -2732,7 +2732,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4783
+          "line": 4872
         }
       ]
     },
@@ -2753,7 +2753,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6681
+          "line": 6933
         }
       ]
     },
@@ -2774,7 +2774,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6626
+          "line": 6878
         }
       ]
     },
@@ -2797,7 +2797,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6652
+          "line": 6904
         }
       ]
     },
@@ -2820,7 +2820,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6583
+          "line": 6835
         }
       ]
     },
@@ -2843,7 +2843,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6596
+          "line": 6848
         }
       ]
     },
@@ -2866,7 +2866,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6606
+          "line": 6858
         }
       ]
     },
@@ -2889,7 +2889,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6616
+          "line": 6868
         }
       ]
     },
@@ -2910,7 +2910,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6039
+          "line": 6128
         }
       ]
     },
@@ -2931,7 +2931,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6071
+          "line": 6160
         }
       ]
     },
@@ -2952,7 +2952,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6456
+          "line": 6696
         }
       ]
     },
@@ -2973,7 +2973,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6462
+          "line": 6702
         }
       ]
     },
@@ -2994,7 +2994,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6470
+          "line": 6710
         }
       ]
     },
@@ -3015,7 +3015,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6479
+          "line": 6719
         }
       ]
     },
@@ -3036,7 +3036,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8283
+          "line": 8552
         }
       ]
     },
@@ -3057,7 +3057,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 8258
+          "line": 8527
         }
       ]
     },
@@ -3078,7 +3078,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6753
+          "line": 7005
         }
       ]
     },
@@ -3099,7 +3099,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6278
+          "line": 6367
         }
       ]
     },
@@ -3120,7 +3120,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7093
+          "line": 7362
         }
       ]
     },
@@ -3141,7 +3141,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7192
+          "line": 7461
         }
       ]
     },
@@ -3164,7 +3164,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6128
+          "line": 6217
         }
       ]
     },
@@ -3187,7 +3187,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6227
+          "line": 6316
         }
       ]
     },
@@ -3208,7 +3208,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4824
+          "line": 4913
         }
       ]
     },
@@ -3229,7 +3229,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4911
+          "line": 5000
         }
       ]
     },
@@ -3250,7 +3250,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4643
+          "line": 4732
         }
       ]
     },
@@ -3271,7 +3271,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4697
+          "line": 4786
         }
       ]
     },
@@ -3292,7 +3292,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5131
+          "line": 5220
         }
       ]
     },
@@ -3313,7 +3313,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4614
+          "line": 4703
         }
       ]
     },
@@ -3334,7 +3334,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4674
+          "line": 4763
         }
       ]
     },
@@ -3355,7 +3355,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5150
+          "line": 5239
         }
       ]
     },
@@ -3376,7 +3376,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5012
+          "line": 5101
         }
       ]
     },
@@ -3397,7 +3397,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6328
+          "line": 6425
         }
       ]
     },
@@ -3418,7 +3418,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6333
+          "line": 6430
         }
       ]
     },
@@ -3439,7 +3439,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6360
+          "line": 6457
         }
       ]
     },
@@ -3460,7 +3460,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6342
+          "line": 6439
         }
       ]
     },
@@ -3481,7 +3481,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6350
+          "line": 6447
         }
       ]
     },
@@ -3504,30 +3504,112 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6417
+          "line": 6653
         }
       ]
     },
     {
       "method": "GET",
-      "path": "/knowledge-bases/{base_id}/facts",
+      "path": "/knowledge-bases/{base_id}/documents",
       "summary": "",
       "description": "",
       "tags": [],
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
+      "handler": "list_knowledge_documents",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6581
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/documents",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "upload_knowledge_document",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6589
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/knowledge-bases/{base_id}/documents/{document_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "delete_knowledge_document",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6636
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-bases/{base_id}/documents/{document_id}",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "get_knowledge_document",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6612
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/knowledge-bases/{base_id}/documents/{document_id}/imports",
+      "summary": "",
+      "description": "",
+      "tags": [],
+      "operation_id": "",
+      "auth_hint": "authenticated",
+      "owner_hint": "current_user",
+      "handler": "import_knowledge_document",
+      "parameters": [],
+      "request_schemas": [],
+      "response_schemas": [],
+      "sources": [
+        {
+          "kind": "code",
+          "path": "app/reply_server.py",
+          "line": 6620
         }
       ]
     },
@@ -3540,44 +3622,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "DELETE",
-      "path": "/knowledge-bases/{base_id}/facts/{content_id}",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string",
-        "query:expected_version:integer"
-      ],
+      "handler": "create_knowledge_fact_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6493
         }
       ]
     },
@@ -3590,43 +3643,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/knowledge-bases/{base_id}/qa-entries",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
+      "handler": "update_knowledge_fact_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6499
         }
       ]
     },
@@ -3639,44 +3664,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "DELETE",
-      "path": "/knowledge-bases/{base_id}/qa-entries/{content_id}",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string",
-        "query:expected_version:integer"
-      ],
+      "handler": "create_knowledge_qa_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6529
         }
       ]
     },
@@ -3689,43 +3685,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/knowledge-bases/{base_id}/rules",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
+      "handler": "update_knowledge_qa_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6535
         }
       ]
     },
@@ -3738,44 +3706,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "DELETE",
-      "path": "/knowledge-bases/{base_id}/rules/{content_id}",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string",
-        "query:expected_version:integer"
-      ],
+      "handler": "create_knowledge_rule_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6517
         }
       ]
     },
@@ -3788,43 +3727,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/knowledge-bases/{base_id}/sources",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
+      "handler": "update_knowledge_rule_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6523
         }
       ]
     },
@@ -3837,44 +3748,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
-      "response_schemas": [],
-      "sources": [
-        {
-          "kind": "code",
-          "path": "app/reply_server.py",
-          "line": 6388
-        }
-      ]
-    },
-    {
-      "method": "DELETE",
-      "path": "/knowledge-bases/{base_id}/sources/{content_id}",
-      "summary": "",
-      "description": "",
-      "tags": [],
-      "operation_id": "",
-      "auth_hint": "authenticated",
-      "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string",
-        "query:expected_version:integer"
-      ],
+      "handler": "create_knowledge_source_route",
+      "parameters": [],
       "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6505
         }
       ]
     },
@@ -3887,20 +3769,15 @@
       "operation_id": "",
       "auth_hint": "authenticated",
       "owner_hint": "current_user",
-      "handler": "_register_content_routes",
-      "parameters": [
-        "path:base_id:string",
-        "path:content_id:string"
-      ],
-      "request_schemas": [
-        "body:KnowledgeMutationRequest"
-      ],
+      "handler": "update_knowledge_source_route",
+      "parameters": [],
+      "request_schemas": [],
       "response_schemas": [],
       "sources": [
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6388
+          "line": 6511
         }
       ]
     },
@@ -3921,7 +3798,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 652
+          "line": 739
         }
       ]
     },
@@ -3942,7 +3819,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 702
+          "line": 789
         }
       ]
     },
@@ -3965,7 +3842,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4366
+          "line": 4455
         }
       ]
     },
@@ -3986,7 +3863,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4311
+          "line": 4400
         }
       ]
     },
@@ -4007,7 +3884,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 648
+          "line": 735
         }
       ]
     },
@@ -4028,7 +3905,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 869
+          "line": 956
         }
       ]
     },
@@ -4049,7 +3926,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6963
+          "line": 7215
         }
       ]
     },
@@ -4070,7 +3947,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7078
+          "line": 7347
         }
       ]
     },
@@ -4091,7 +3968,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7065
+          "line": 7334
         }
       ]
     },
@@ -4112,7 +3989,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3837
+          "line": 3926
         }
       ]
     },
@@ -4133,7 +4010,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3858
+          "line": 3947
         }
       ]
     },
@@ -4154,7 +4031,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3966
+          "line": 4055
         }
       ]
     },
@@ -4177,7 +4054,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3915
+          "line": 4004
         }
       ]
     },
@@ -4198,7 +4075,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3947
+          "line": 4036
         }
       ]
     },
@@ -4219,7 +4096,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3882
+          "line": 3971
         }
       ]
     },
@@ -4240,7 +4117,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3976
+          "line": 4065
         }
       ]
     },
@@ -4261,7 +4138,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3744
+          "line": 3833
         }
       ]
     },
@@ -4282,7 +4159,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3756
+          "line": 3845
         }
       ]
     },
@@ -4303,7 +4180,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3775
+          "line": 3864
         }
       ]
     },
@@ -4324,7 +4201,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3819
+          "line": 3908
         }
       ]
     },
@@ -4345,7 +4222,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3803
+          "line": 3892
         }
       ]
     },
@@ -4366,7 +4243,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3646
+          "line": 3735
         }
       ]
     },
@@ -4387,7 +4264,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3657
+          "line": 3746
         }
       ]
     },
@@ -4408,7 +4285,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3726
+          "line": 3815
         }
       ]
     },
@@ -4429,7 +4306,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3679
+          "line": 3768
         }
       ]
     },
@@ -4452,7 +4329,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3694
+          "line": 3783
         }
       ]
     },
@@ -4473,7 +4350,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2674
+          "line": 2763
         }
       ]
     },
@@ -4494,7 +4371,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2747
+          "line": 2836
         }
       ]
     },
@@ -4515,7 +4392,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5720
+          "line": 5809
         }
       ]
     },
@@ -4536,7 +4413,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5730
+          "line": 5819
         }
       ]
     },
@@ -4557,7 +4434,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5765
+          "line": 5854
         }
       ]
     },
@@ -4578,7 +4455,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5747
+          "line": 5836
         }
       ]
     },
@@ -4599,7 +4476,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5779
+          "line": 5868
         }
       ]
     },
@@ -4620,7 +4497,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5644
+          "line": 5733
         }
       ]
     },
@@ -4641,7 +4518,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5654
+          "line": 5743
         }
       ]
     },
@@ -4662,7 +4539,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5689
+          "line": 5778
         }
       ]
     },
@@ -4683,7 +4560,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5671
+          "line": 5760
         }
       ]
     },
@@ -4704,7 +4581,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5703
+          "line": 5792
         }
       ]
     },
@@ -4725,7 +4602,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5598
+          "line": 5687
         }
       ]
     },
@@ -4746,7 +4623,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5630
+          "line": 5719
         }
       ]
     },
@@ -4767,7 +4644,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5612
+          "line": 5701
         }
       ]
     },
@@ -4788,7 +4665,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5829
+          "line": 5918
         }
       ]
     },
@@ -4809,7 +4686,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5807
+          "line": 5896
         }
       ]
     },
@@ -4830,7 +4707,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5818
+          "line": 5907
         }
       ]
     },
@@ -4851,7 +4728,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5796
+          "line": 5885
         }
       ]
     },
@@ -4872,7 +4749,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3002
+          "line": 3091
         }
       ]
     },
@@ -4893,7 +4770,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3442
+          "line": 3531
         }
       ]
     },
@@ -4914,7 +4791,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 2982
+          "line": 3071
         }
       ]
     },
@@ -4935,7 +4812,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3339
+          "line": 3428
         }
       ]
     },
@@ -4956,7 +4833,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 3400
+          "line": 3489
         }
       ]
     },
@@ -4977,7 +4854,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9681
+          "line": 9950
         }
       ]
     },
@@ -4998,7 +4875,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9691
+          "line": 9960
         }
       ]
     },
@@ -5019,7 +4896,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9734
+          "line": 10003
         }
       ]
     },
@@ -5040,7 +4917,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9713
+          "line": 9982
         }
       ]
     },
@@ -5061,7 +4938,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 9747
+          "line": 10016
         }
       ]
     },
@@ -5082,7 +4959,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 689
+          "line": 776
         }
       ]
     },
@@ -5103,7 +4980,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1268
+          "line": 1355
         }
       ]
     },
@@ -5124,7 +5001,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 658
+          "line": 745
         }
       ]
     },
@@ -5147,7 +5024,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4340
+          "line": 4429
         }
       ]
     },
@@ -5168,7 +5045,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4284
+          "line": 4373
         }
       ]
     },
@@ -5189,7 +5066,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 6980
+          "line": 7249
         }
       ]
     },
@@ -5210,7 +5087,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7038
+          "line": 7307
         }
       ]
     },
@@ -5233,7 +5110,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1671
+          "line": 1758
         }
       ]
     },
@@ -5254,7 +5131,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1201
+          "line": 1288
         }
       ]
     },
@@ -5275,7 +5152,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4196
+          "line": 4285
         }
       ]
     },
@@ -5296,7 +5173,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4256
+          "line": 4345
         }
       ]
     },
@@ -5317,7 +5194,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 4165
+          "line": 4254
         }
       ]
     },
@@ -5338,7 +5215,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5907
+          "line": 5996
         }
       ]
     },
@@ -5359,7 +5236,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 5093
+          "line": 5182
         }
       ]
     },
@@ -5380,7 +5257,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7283
+          "line": 7552
         }
       ]
     },
@@ -5401,7 +5278,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7318
+          "line": 7587
         }
       ]
     },
@@ -5422,7 +5299,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 7294
+          "line": 7563
         }
       ]
     },
@@ -5443,7 +5320,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 856
+          "line": 943
         }
       ]
     },
@@ -5464,7 +5341,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1001
+          "line": 1088
         }
       ]
     },
@@ -5489,7 +5366,7 @@
         {
           "kind": "code",
           "path": "app/reply_server.py",
-          "line": 1766
+          "line": 1853
         }
       ]
     }

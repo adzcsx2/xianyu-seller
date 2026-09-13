@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AccountDetail, Item, KnowledgeBaseSummary, KnowledgeBinding } from '../types';
 import {
@@ -34,6 +34,8 @@ const KnowledgeBase: React.FC = () => {
   const [editingBaseId, setEditingBaseId] = useState<string | null>(null);
   const [knowledgeDirty, setKnowledgeDirty] = useState(false);
   const [operationKey, setOperationKey] = useState<string | null>(null);
+  const bindingRequestRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const accountItems = useMemo(
     () => items.filter(item => item.cookie_id === selectedAccountId),
@@ -55,11 +57,13 @@ const KnowledgeBase: React.FC = () => {
 
   const loadBases = async () => setBases(await listKnowledgeBases());
   const loadBindings = async (cookieId = selectedAccountId, itemId = selectedItemId) => {
+    const requestId = ++bindingRequestRef.current;
     if (!cookieId || !itemId) {
-      setBindings([]);
+      if (mountedRef.current && requestId === bindingRequestRef.current) setBindings([]);
       return;
     }
-    setBindings(await getKnowledgeBindings(cookieId, itemId));
+    const result = await getKnowledgeBindings(cookieId, itemId);
+    if (mountedRef.current && requestId === bindingRequestRef.current) setBindings(result);
   };
   const reload = async () => {
     setRefreshing(true);
@@ -83,12 +87,14 @@ const KnowledgeBase: React.FC = () => {
   const handleAccountChange = async (accountId: string) => {
     if (!(await confirmDiscardChanges())) return;
     closeEditorAfterDiscard();
+    bindingRequestRef.current += 1;
     setSelectedAccountId(accountId);
     setSelectedItemId(items.find(item => item.cookie_id === accountId)?.item_id || '');
   };
   const handleItemChange = async (itemId: string) => {
     if (!(await confirmDiscardChanges())) return;
     closeEditorAfterDiscard();
+    bindingRequestRef.current += 1;
     setSelectedItemId(itemId);
   };
   const handleReload = async () => {
@@ -104,6 +110,7 @@ const KnowledgeBase: React.FC = () => {
   useEffect(() => {
     Promise.all([getAccountDetails(), getItems(), listKnowledgeBases()])
       .then(([accountData, itemData, baseData]) => {
+        if (!mountedRef.current) return;
         setAccounts(accountData);
         setItems(itemData);
         setBases(baseData);
@@ -111,8 +118,17 @@ const KnowledgeBase: React.FC = () => {
         setSelectedAccountId(accountId);
         setSelectedItemId(itemData.find(item => item.cookie_id === accountId)?.item_id || '');
       })
-      .catch(error => notify(error instanceof Error ? error.message : '知识库页面加载失败', 'error'))
-      .finally(() => setLoading(false));
+      .catch(error => {
+        if (mountedRef.current) notify(error instanceof Error ? error.message : '知识库页面加载失败', 'error');
+      })
+      .finally(() => {
+        if (mountedRef.current) setLoading(false);
+      });
+  }, []);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    bindingRequestRef.current += 1;
   }, []);
 
   useEffect(() => {
@@ -219,8 +235,8 @@ const KnowledgeBase: React.FC = () => {
     />
 
     <section className="section-panel grid gap-4 p-4 md:grid-cols-2">
-      <label><span className="field-label">账号</span><select value={selectedAccountId} onChange={event => void handleAccountChange(event.target.value)} disabled={!accounts.length} className="ios-input w-full rounded-md px-3 py-2 text-sm"><option value="">{accounts.length ? '请选择账号' : '暂无账号'}</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.nickname || account.remark || account.id}</option>)}</select></label>
-      <label><span className="field-label">商品</span><select value={selectedItemId} onChange={event => void handleItemChange(event.target.value)} disabled={!accountItems.length} className="ios-input w-full rounded-md px-3 py-2 text-sm"><option value="">{accountItems.length ? '请选择商品' : '暂无商品'}</option>{accountItems.map(item => <option key={item.item_id} value={item.item_id}>{item.item_title || item.item_id} · {item.item_price || '未定价'}</option>)}</select></label>
+      <label><span className="field-label">账号</span><select value={selectedAccountId} onChange={event => void handleAccountChange(event.target.value)} disabled={!accounts.length || operationKey !== null} className="ios-input w-full rounded-md px-3 py-2 text-sm"><option value="">{accounts.length ? '请选择账号' : '暂无账号'}</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.nickname || account.remark || account.id}</option>)}</select></label>
+      <label><span className="field-label">商品</span><select value={selectedItemId} onChange={event => void handleItemChange(event.target.value)} disabled={!accountItems.length || operationKey !== null} className="ios-input w-full rounded-md px-3 py-2 text-sm"><option value="">{accountItems.length ? '请选择商品' : '暂无商品'}</option>{accountItems.map(item => <option key={item.item_id} value={item.item_id}>{item.item_title || item.item_id} · {item.item_price || '未定价'}</option>)}</select></label>
     </section>
 
     <section className="section-panel p-5">

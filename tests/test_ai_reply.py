@@ -122,6 +122,22 @@ class AIReplyEngineTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "未返回可用答案"):
                 self.engine.answer_knowledge_base("account-1", {}, "测试问题")
 
+    def test_provided_entries_match_the_prompt_character_budget(self):
+        knowledge_base = {
+            "facts": [
+                {"fact_key": "first", "content": "甲" * 6000, "enabled": True, "priority": 2},
+                {"fact_key": "second", "content": "乙" * 6000, "enabled": True, "priority": 1},
+            ],
+            "qa_entries": [],
+        }
+
+        selected = self.engine.knowledge_base_provided_entries(knowledge_base)
+        prompt = self.engine._knowledge_base_qa_prompt(knowledge_base)
+
+        self.assertEqual([entry["fact_key"] for entry in selected], ["first"])
+        self.assertIn("甲" * 100, prompt)
+        self.assertNotIn("乙" * 100, prompt)
+
     def test_knowledge_base_answer_preserves_multiline_content_beyond_buyer_reply_limit(self):
         settings = {
             "ai_enabled": True,

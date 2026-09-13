@@ -12,7 +12,7 @@
 | `cards` | 卡密库存 | 分组、库存和导入 | `feature_cards_enabled` |
 | `auto-reply` | 自动回复 | 关键词与规则回复 | `feature_auto_reply_enabled` |
 | `ai-reply` | AI 回复 | AI 配置、测试和自动回复 | `feature_ai_reply_enabled` |
-| `knowledge-base` | 知识库 | 知识库 CRUD、绑定和预览 | `feature_knowledge_base_enabled` |
+| `knowledge-base` | 知识库 | 知识库 CRUD、商品绑定、文档上传/预览/导入和依据核对 | `feature_knowledge_base_enabled` |
 | `product-automation` | 商品自动化 | 素材、筛选、删除和修复任务 | `feature_product_automation_enabled` |
 
 ## 可见性与执行语义
@@ -39,6 +39,8 @@
 登录 → 账号连接 → 商品/订单同步 → 配置规则与知识库
      → 开启需要的后台任务 → 消息/订单触发动作 → 通知与日志核对
 ```
+
+知识库文档的普通用户路径是：打开全局知识库 → 上传 Markdown/TXT → 预览并勾选章节 → 确认这些章节可成为买家可见事实 → 导入 → 在来源卡片核对关联数和 AI 可用数 → 用问答区查看“本次提供给 AI 的依据”。仅在“来源引用”里填写类似 `README.md：产品简介` 的标题会明确显示“仅引用记录 · 未上传文件”。内部键由系统生成，创建条目时无需填写。
 
 ## 前端与 API 的兼容约束
 

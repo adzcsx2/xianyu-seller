@@ -5,7 +5,7 @@
 - 服务默认地址为 `http://localhost:8080`；前端使用同源请求。
 - 需要认证的接口使用 `Authorization: Bearer <session-token>`。
 - `/docs` 和 `/redoc` 提供 FastAPI 运行时文档；`.ai/index/backend-apis.json` 是源码检索索引。
-- 完整路径、handler、认证提示和 schema 以 [全量接口目录](ai-rules/05-全量接口目录.md) 与当前源码为准；当前源码索引包含 255 条路由，且因没有独立 OpenAPI JSON，部分 schema 仍需回到 handler 核验。
+- 完整路径、handler、认证提示和 schema 以 [全量接口目录](ai-rules/05-全量接口目录.md) 与当前源码为准；当前源码索引包含 260 条路由，且因没有独立 OpenAPI JSON，部分 schema 仍需回到 handler 核验。
 
 ## 入口接口
 
@@ -67,6 +67,19 @@
 | 商品自动化 | `/product-automation` | 素材、筛选、删除、修复和运行记录 |
 | 管理与备份 | `/admin/*`、`/backup/*` | 管理数据、日志、备份导入导出；高风险操作需管理员或归属权限 |
 | 验证码与风控 | `/api/captcha/*`、`/api/risk-control/*` | 人工验证会话、截图、鼠标事件和风控状态 |
+
+## 知识库文档闭环
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` / `POST` | `/knowledge-bases/{base_id}/documents` | 列出文档元数据，或上传不超过 512 KiB 的 UTF-8 Markdown/TXT；相同内容重复上传返回既有文档。 |
+| `GET` | `/knowledge-bases/{base_id}/documents/{document_id}` | 用户主动打开预览时返回确定性解析的章节；列表接口不返回正文。 |
+| `POST` | `/knowledge-bases/{base_id}/documents/{document_id}/imports` | 把用户明确选择的章节一次性导入为启用事实，并自动关联文档来源。 |
+| `DELETE` | `/knowledge-bases/{base_id}/documents/{document_id}` | 删除未使用文档；有关联时返回分型 409，只有显式选择才会连同自动导入的事实删除。 |
+
+来源标题本身不代表文件已经上传。旧来源会返回 `metadata_only`，文档来源会返回解析/导入状态、关联条目数和运行时启用数。知识库问答与商品预览的 `provided_evidence` 只列出本次实际提供给 AI 的安全来源摘要，不包含原始正文、备注、本地路径或内部规则。
+
+知识库写操作使用聚合 `expected_version`。冲突响应在 `detail` 中提供稳定的 `error_code`，包括 `knowledge_version_conflict`、`knowledge_source_in_use`、`knowledge_document_in_use` 和 `knowledge_validation_error`。
 
 ## 认证与错误边界
 

@@ -415,7 +415,6 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
             f"/knowledge-bases/{base['id']}/qa-entries",
             json={
                 "expected_version": 1,
-                "qa_key": "pricing.monthly",
                 "category": "pricing",
                 "questions": ["多少钱一个月"],
                 "keywords": ["价格"],
@@ -425,11 +424,12 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
             },
         )
         self.assertEqual(qa.status_code, 200, qa.text)
+        generated_qa_key = qa.json()["qa_key"]
         old = self.client.get("/items/cookie-a/item-1/ai-knowledge")
         self.assertEqual(old.status_code, 200, old.text)
         self.assertEqual(old.json()["display_name"], "Passistant")
         self.assertEqual(old.json()["entries"], [{
-            "knowledge_key": "pricing.monthly",
+            "knowledge_key": generated_qa_key,
             "category": "pricing",
             "question_patterns": ["多少钱一个月"],
             "keywords": ["价格"],
@@ -445,7 +445,6 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
             f"/knowledge-bases/{base['id']}/qa-entries",
             json={
                 "expected_version": base["version"],
-                "qa_key": "",
                 "category": "general",
                 "questions": ["这个怎么使用？"],
                 "keywords": ["使用"],
@@ -465,11 +464,11 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
         other = self.client.post("/knowledge-bases", json={"name": "其他知识库"}).json()
         self.client.post(
             f"/knowledge-bases/{clicked['id']}/facts",
-            json={"expected_version": 1, "fact_key": "clicked", "content": "当前库内容"},
+            json={"expected_version": 1, "content": "当前库内容"},
         )
         self.client.post(
             f"/knowledge-bases/{other['id']}/facts",
-            json={"expected_version": 1, "fact_key": "other", "content": "其他库内容"},
+            json={"expected_version": 1, "content": "其他库内容"},
         )
         self.db.save_ai_reply_settings("cookie-a", {
             "ai_enabled": True,
@@ -566,11 +565,11 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
 
         response = self.client.post(
             f"/knowledge-bases/{created['id']}/facts?_kind=sources",
-            json={"expected_version": 1, "fact_key": "identity", "content": "事实内容"},
+            json={"expected_version": 1, "content": "事实内容"},
         )
         self.assertEqual(response.status_code, 200, response.text)
         detail = self.client.get(f"/knowledge-bases/{created['id']}").json()
-        self.assertEqual([fact["fact_key"] for fact in detail["facts"]], ["identity"])
+        self.assertRegex(detail["facts"][0]["fact_key"], r"^fact-[a-f0-9]{12}$")
         self.assertEqual(detail["sources"], [])
 
     def test_unknown_content_fields_return_422(self):
@@ -579,12 +578,91 @@ class GlobalKnowledgeRouteContractTests(unittest.TestCase):
             f"/knowledge-bases/{created['id']}/facts",
             json={
                 "expected_version": 1,
-                "fact_key": "identity",
                 "content": "事实内容",
                 "titel": "拼写错误",
             },
         )
         self.assertEqual(response.status_code, 422, response.text)
+
+    def test_public_content_api_rejects_internal_keys_on_create_and_update(self):
+        created = self.client.post("/knowledge-bases", json={"name": "内部键隔离"}).json()
+        rejected_create = self.client.post(
+            f"/knowledge-bases/{created['id']}/facts",
+            json={"expected_version": 1, "fact_key": "client-key", "content": "合成事实"},
+        )
+        self.assertEqual(rejected_create.status_code, 422, rejected_create.text)
+
+        fact = self.client.post(
+            f"/knowledge-bases/{created['id']}/facts",
+            json={"expected_version": 1, "content": "合成事实"},
+        ).json()
+        rejected_update = self.client.put(
+            f"/knowledge-bases/{created['id']}/facts/{fact['id']}",
+            json={"expected_version": 2, "fact_key": "changed-key", "content": "更新事实"},
+        )
+        self.assertEqual(rejected_update.status_code, 422, rejected_update.text)
+
+    def test_document_upload_preview_import_and_duplicate_api(self):
+        base = self.client.post("/knowledge-bases", json={"name": "文档接口库"}).json()
+        uploaded = self.client.post(
+            f"/knowledge-bases/{base['id']}/documents",
+            data={"expected_version": 1},
+            files={"file": ("guide.md", "# 使用\n合成公开说明。".encode(), "text/markdown")},
+        )
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        document = uploaded.json()["document"]
+        self.assertEqual(document["status"], "parsed")
+        self.assertEqual(document["linked_entry_count"], 0)
+
+        listing = self.client.get(f"/knowledge-bases/{base['id']}/documents")
+        self.assertEqual(listing.status_code, 200, listing.text)
+        self.assertNotIn("sections", listing.json()["documents"][0])
+        self.assertNotIn("合成公开说明", listing.text)
+        detail = self.client.get(f"/knowledge-bases/{base['id']}/documents/{document['id']}").json()
+        imported = self.client.post(
+            f"/knowledge-bases/{base['id']}/documents/{document['id']}/imports",
+            json={"expected_version": 2, "section_ids": [detail["sections"][0]["id"]]},
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        source = self.client.get(f"/knowledge-bases/{base['id']}").json()["sources"][0]
+        self.assertEqual(source["document_status"], "imported")
+        self.assertEqual(source["runtime_enabled_count"], 1)
+
+        duplicate = self.client.post(
+            f"/knowledge-bases/{base['id']}/documents",
+            data={"expected_version": 3},
+            files={"file": ("other-name.md", "# 使用\n合成公开说明。".encode(), "text/markdown")},
+        )
+        self.assertEqual(duplicate.status_code, 200, duplicate.text)
+        self.assertTrue(duplicate.json()["duplicate"])
+        self.assertEqual(duplicate.json()["version"], 3)
+
+    def test_all_public_content_kinds_generate_internal_keys(self):
+        base = self.client.post("/knowledge-bases", json={"name": "四类自动键"}).json()
+        cases = (
+            ("facts", {"content": "合成事实"}, "fact_key", "fact-"),
+            ("sources", {"title": "合成来源"}, "source_key", "source-"),
+            ("rules", {"name": "合成规则", "rule_type": "fixed_reply", "matchers": ["合成"], "response": "合成回复", "config_json": {}}, "rule_key", "rule-"),
+            ("qa-entries", {"questions": ["合成问题"], "answer": "合成答案"}, "qa_key", "qa-"),
+        )
+        version = 1
+        for path, payload, key_field, prefix in cases:
+            response = self.client.post(
+                f"/knowledge-bases/{base['id']}/{path}",
+                json={"expected_version": version, **payload},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertTrue(response.json()[key_field].startswith(prefix))
+            version += 1
+
+    def test_knowledge_errors_are_typed(self):
+        base = self.client.post("/knowledge-bases", json={"name": "错误类型库"}).json()
+        stale = self.client.post(
+            f"/knowledge-bases/{base['id']}/facts",
+            json={"expected_version": 99, "content": "合成事实"},
+        )
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.assertEqual(stale.json()["detail"]["error_code"], "knowledge_version_conflict")
 
     def test_account_ai_settings_reject_retired_business_fields(self):
         response = self.client.put(

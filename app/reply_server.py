@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Body, Query
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Body, Query, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -27,6 +27,7 @@ from app.db_manager import (
     KnowledgeBaseKeyConflict,
     KnowledgeBindingConflict,
     KnowledgeSourceInUse,
+    KnowledgeDocumentInUse,
     MigrationPrecondition,
     CardInventoryConflict,
 )
@@ -47,6 +48,7 @@ from app.ai_reply_engine import ai_reply_engine
 from app.ai_config import apply_env_ai_settings
 from app.ai_models import fetch_available_models
 from app.knowledge_runtime import KnowledgeRuntimeService
+from app.knowledge_documents import KnowledgeDocumentError
 from app.routers.delivery_block import create_delivery_block_router
 from utils.qr_login import qr_login_manager
 from utils.xianyu_utils import trans_cookies
@@ -284,10 +286,88 @@ class KnowledgeBaseUpdateRequest(BaseModel):
     enabled: Optional[StrictBool] = None
 
 
-class KnowledgeMutationRequest(BaseModel):
-    """单资源 CRUD 请求；字段按资源类型由领域层进一步校验。"""
-    model_config = ConfigDict(extra="allow")
+class KnowledgeContentMutationRequest(BaseModel):
+    """公共内容写入的共同字段；稳定 key 始终由服务端管理。"""
+    model_config = ConfigDict(extra="forbid")
     expected_version: StrictInt = Field(ge=1)
+
+
+class KnowledgeFactCreateRequest(KnowledgeContentMutationRequest):
+    category: str = Field(default="product", max_length=80)
+    title: str = Field(default="", max_length=120)
+    content: str = Field(min_length=1, max_length=800)
+    source_ids: List[str] = Field(default_factory=list, max_length=8)
+    priority: StrictInt = Field(default=0, ge=-100, le=100)
+    enabled: StrictBool = True
+
+
+class KnowledgeFactUpdateRequest(KnowledgeContentMutationRequest):
+    category: Optional[str] = Field(default=None, max_length=80)
+    title: Optional[str] = Field(default=None, max_length=120)
+    content: Optional[str] = Field(default=None, min_length=1, max_length=800)
+    source_ids: Optional[List[str]] = Field(default=None, max_length=8)
+    priority: Optional[StrictInt] = Field(default=None, ge=-100, le=100)
+    enabled: Optional[StrictBool] = None
+
+
+class KnowledgeSourceCreateRequest(KnowledgeContentMutationRequest):
+    title: str = Field(min_length=1, max_length=120)
+    reference: str = Field(default="", max_length=500)
+    url: str = Field(default="", max_length=2000)
+    notes: str = Field(default="", max_length=500)
+
+
+class KnowledgeSourceUpdateRequest(KnowledgeContentMutationRequest):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    reference: Optional[str] = Field(default=None, max_length=500)
+    url: Optional[str] = Field(default=None, max_length=2000)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class KnowledgeRuleCreateRequest(KnowledgeContentMutationRequest):
+    name: str = Field(min_length=1, max_length=120)
+    rule_type: str = Field(min_length=1, max_length=40)
+    intent: str = Field(default="general", max_length=80)
+    matchers: List[str] = Field(default_factory=list, max_length=100)
+    instruction: str = Field(default="", max_length=800)
+    response: str = Field(default="", max_length=300)
+    config_json: Dict[str, Any] = Field(default_factory=dict)
+    source_ids: List[str] = Field(default_factory=list, max_length=8)
+    priority: StrictInt = Field(default=0, ge=-100, le=100)
+    enabled: StrictBool = True
+
+
+class KnowledgeRuleUpdateRequest(KnowledgeContentMutationRequest):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    rule_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    intent: Optional[str] = Field(default=None, max_length=80)
+    matchers: Optional[List[str]] = Field(default=None, max_length=100)
+    instruction: Optional[str] = Field(default=None, max_length=800)
+    response: Optional[str] = Field(default=None, max_length=300)
+    config_json: Optional[Dict[str, Any]] = None
+    source_ids: Optional[List[str]] = Field(default=None, max_length=8)
+    priority: Optional[StrictInt] = Field(default=None, ge=-100, le=100)
+    enabled: Optional[StrictBool] = None
+
+
+class KnowledgeQACreateRequest(KnowledgeContentMutationRequest):
+    category: str = Field(default="general", max_length=80)
+    questions: List[str] = Field(default_factory=list, max_length=20)
+    keywords: List[str] = Field(default_factory=list, max_length=30)
+    answer: str = Field(min_length=1, max_length=800)
+    source_ids: List[str] = Field(default_factory=list, max_length=8)
+    priority: StrictInt = Field(default=0, ge=-100, le=100)
+    enabled: StrictBool = True
+
+
+class KnowledgeQAUpdateRequest(KnowledgeContentMutationRequest):
+    category: Optional[str] = Field(default=None, max_length=80)
+    questions: Optional[List[str]] = Field(default=None, max_length=20)
+    keywords: Optional[List[str]] = Field(default=None, max_length=30)
+    answer: Optional[str] = Field(default=None, min_length=1, max_length=800)
+    source_ids: Optional[List[str]] = Field(default=None, max_length=8)
+    priority: Optional[StrictInt] = Field(default=None, ge=-100, le=100)
+    enabled: Optional[StrictBool] = None
 
 
 class KnowledgeBindingRequest(BaseModel):
@@ -312,6 +392,13 @@ class KnowledgeBaseAskResponse(BaseModel):
     knowledge_base_name: str
     model_name: str
     answer: str
+    provided_evidence: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class KnowledgeDocumentImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: StrictInt = Field(ge=1)
+    section_ids: List[str] = Field(min_length=1, max_length=100)
 
 
 class LoginResponse(BaseModel):
@@ -552,7 +639,7 @@ async def log_requests(request, call_next):
 
 # 提供前端静态文件
 import os
-static_dir = str(PROJECT_ROOT / 'static')
+static_dir = os.path.abspath(os.getenv('STATIC_DIR') or str(PROJECT_ROOT / 'static'))
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)
 
@@ -6314,17 +6401,25 @@ def _require_product_knowledge_scope(
 
 def _knowledge_http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, KnowledgeNotFound):
-        return HTTPException(status_code=404, detail="知识库或内容不存在")
-    if isinstance(exc, (KnowledgeBaseKeyConflict, KnowledgeBindingConflict, KnowledgeSourceInUse)):
-        return HTTPException(status_code=409, detail=str(exc))
+        return HTTPException(status_code=404, detail={"error_code": "knowledge_not_found", "message": "知识库、文档或内容不存在"})
+    if isinstance(exc, KnowledgeDocumentError):
+        return HTTPException(status_code=exc.status_code, detail={"error_code": exc.error_code, "message": str(exc)})
+    if isinstance(exc, KnowledgeDocumentInUse):
+        return HTTPException(status_code=409, detail={"error_code": "knowledge_document_in_use", "message": "文档仍有关联条目", "usage": exc.usage})
+    if isinstance(exc, KnowledgeSourceInUse):
+        return HTTPException(status_code=409, detail={"error_code": "knowledge_source_in_use", "message": "来源仍有关联条目", "usage": exc.usage})
+    if isinstance(exc, KnowledgeBaseKeyConflict):
+        return HTTPException(status_code=409, detail={"error_code": "knowledge_key_conflict", "message": str(exc)})
+    if isinstance(exc, KnowledgeBindingConflict):
+        return HTTPException(status_code=409, detail={"error_code": "knowledge_binding_conflict", "message": str(exc)})
     if isinstance(exc, KnowledgeVersionConflict):
         return HTTPException(
             status_code=409,
-            detail={"message": "知识版本已变化，请重新加载", "expected_version": exc.expected_version, "current_version": exc.current_version},
+            detail={"error_code": "knowledge_version_conflict", "message": "知识版本已变化，请重新加载", "expected_version": exc.expected_version, "current_version": exc.current_version},
         )
     if isinstance(exc, ValueError):
-        return HTTPException(status_code=422, detail=str(exc))
-    return HTTPException(status_code=500, detail="知识库操作失败")
+        return HTTPException(status_code=422, detail={"error_code": "knowledge_validation_error", "message": str(exc)})
+    return HTTPException(status_code=500, detail={"error_code": "knowledge_internal_error", "message": "知识库操作失败"})
 
 
 @app.get("/knowledge-bases")
@@ -6368,15 +6463,16 @@ def delete_knowledge_base(base_id: str, expected_version: int = Query(..., ge=1)
         raise _knowledge_http_error(exc) from exc
 
 
-def _create_content(kind: str, base_id: str, request: KnowledgeMutationRequest):
+def _create_content(kind: str, base_id: str, request: KnowledgeContentMutationRequest):
     values = request.model_dump(exclude_unset=True); version = values.pop("expected_version")
-    if kind == "qa_entries" and not str(values.get("qa_key") or "").strip():
-        values["qa_key"] = f"qa-{uuid.uuid4().hex[:12]}"
+    key_field = {"facts": "fact_key", "sources": "source_key", "rules": "rule_key", "qa_entries": "qa_key"}[kind]
+    prefix = {"facts": "fact", "sources": "source", "rules": "rule", "qa_entries": "qa"}[kind]
+    values[key_field] = f"{prefix}-{uuid.uuid4().hex[:12]}"
     method = {"facts": db_manager.create_knowledge_fact, "sources": db_manager.create_knowledge_source, "rules": db_manager.create_knowledge_rule, "qa_entries": db_manager.create_knowledge_qa_entry}[kind]
     return method(base_id, values, expected_version=version)
 
 
-def _update_content(kind: str, base_id: str, content_id: str, request: KnowledgeMutationRequest):
+def _update_content(kind: str, base_id: str, content_id: str, request: KnowledgeContentMutationRequest):
     values = request.model_dump(exclude_unset=True); version = values.pop("expected_version")
     method = {"facts": db_manager.update_knowledge_fact, "sources": db_manager.update_knowledge_source, "rules": db_manager.update_knowledge_rule, "qa_entries": db_manager.update_knowledge_qa_entry}[kind]
     return method(base_id, content_id, values, expected_version=version)
@@ -6387,33 +6483,171 @@ def _delete_content(kind: str, base_id: str, content_id: str, expected_version: 
     return method(base_id, content_id, expected_version=expected_version)
 
 
-def _register_content_routes(kind: str, path_name: str):
-    @app.post(f"/knowledge-bases/{{base_id}}/{path_name}")
-    def create_content(base_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
-        _require_feature_enabled("feature_knowledge_base_enabled")
-        try: return _create_content(kind, base_id, request)
-        except Exception as exc: raise _knowledge_http_error(exc) from exc
+def _content_route_result(operation):
+    try:
+        return operation()
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
 
-    @app.put(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
-    def update_content(base_id: str, content_id: str, request: KnowledgeMutationRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
-        _require_feature_enabled("feature_knowledge_base_enabled")
-        try: return _update_content(kind, base_id, content_id, request)
-        except Exception as exc: raise _knowledge_http_error(exc) from exc
 
+@app.post("/knowledge-bases/{base_id}/facts")
+def create_knowledge_fact_route(base_id: str, request: KnowledgeFactCreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _create_content("facts", base_id, request))
+
+
+@app.put("/knowledge-bases/{base_id}/facts/{content_id}")
+def update_knowledge_fact_route(base_id: str, content_id: str, request: KnowledgeFactUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _update_content("facts", base_id, content_id, request))
+
+
+@app.post("/knowledge-bases/{base_id}/sources")
+def create_knowledge_source_route(base_id: str, request: KnowledgeSourceCreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _create_content("sources", base_id, request))
+
+
+@app.put("/knowledge-bases/{base_id}/sources/{content_id}")
+def update_knowledge_source_route(base_id: str, content_id: str, request: KnowledgeSourceUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _update_content("sources", base_id, content_id, request))
+
+
+@app.post("/knowledge-bases/{base_id}/rules")
+def create_knowledge_rule_route(base_id: str, request: KnowledgeRuleCreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _create_content("rules", base_id, request))
+
+
+@app.put("/knowledge-bases/{base_id}/rules/{content_id}")
+def update_knowledge_rule_route(base_id: str, content_id: str, request: KnowledgeRuleUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _update_content("rules", base_id, content_id, request))
+
+
+@app.post("/knowledge-bases/{base_id}/qa-entries")
+def create_knowledge_qa_route(base_id: str, request: KnowledgeQACreateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _create_content("qa_entries", base_id, request))
+
+
+@app.put("/knowledge-bases/{base_id}/qa-entries/{content_id}")
+def update_knowledge_qa_route(base_id: str, content_id: str, request: KnowledgeQAUpdateRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    return _content_route_result(lambda: _update_content("qa_entries", base_id, content_id, request))
+
+
+def _register_content_read_delete_routes(kind: str, path_name: str):
     @app.delete(f"/knowledge-bases/{{base_id}}/{path_name}/{{content_id}}")
     def delete_content(base_id: str, content_id: str, expected_version: int = Query(..., ge=1), current_user: Dict[str, Any] = Depends(get_current_user)):
         _require_feature_enabled("feature_knowledge_base_enabled")
-        try: return _delete_content(kind, base_id, content_id, expected_version)
-        except Exception as exc: raise _knowledge_http_error(exc) from exc
+        return _content_route_result(lambda: _delete_content(kind, base_id, content_id, expected_version))
 
     @app.get(f"/knowledge-bases/{{base_id}}/{path_name}")
     def list_content(base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
-        try: return {path_name.replace("-", "_"): db_manager.list_knowledge_content(kind, base_id)}
-        except Exception as exc: raise _knowledge_http_error(exc) from exc
+        return _content_route_result(lambda: {path_name.replace("-", "_"): db_manager.list_knowledge_content(kind, base_id)})
 
 
 for _kind, _path in (("facts", "facts"), ("sources", "sources"), ("rules", "rules"), ("qa_entries", "qa-entries")):
-    _register_content_routes(_kind, _path)
+    _register_content_read_delete_routes(_kind, _path)
+
+
+def _provided_evidence(knowledge_base: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build a private-field-free account of source-backed content sent to AI."""
+    sources = {source["id"]: source for source in knowledge_base.get("sources", [])}
+    evidence = []
+    seen = set()
+    for entry in entries:
+        content_kind = "qa" if "qa_key" in entry else "fact"
+        content_key = entry.get("qa_key") or entry.get("fact_key") or ""
+        for source_id in entry.get("source_ids", []):
+            source = sources.get(source_id)
+            if not source:
+                continue
+            marker = (content_kind, content_key, source_id)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            evidence.append({
+                "content_type": content_kind,
+                "content_key": content_key,
+                "source_title": source.get("title") or "来源记录",
+                "document_status": source.get("document_status", "metadata_only"),
+            })
+    return evidence
+
+
+@app.get("/knowledge-bases/{base_id}/documents")
+def list_knowledge_documents(base_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        return {"documents": db_manager.list_knowledge_documents(base_id)}
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.post("/knowledge-bases/{base_id}/documents", status_code=201)
+async def upload_knowledge_document(
+    base_id: str,
+    response: Response,
+    file: UploadFile = File(...),
+    expected_version: int = Form(..., ge=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    try:
+        content = await file.read(512 * 1024 + 1)
+        result = db_manager.create_knowledge_document(
+            base_id, file.filename or "document.txt", content, expected_version=expected_version
+        )
+        if result["duplicate"]:
+            response.status_code = 200
+        return result
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+    finally:
+        await file.close()
+
+
+@app.get("/knowledge-bases/{base_id}/documents/{document_id}")
+def get_knowledge_document(base_id: str, document_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        return db_manager.get_knowledge_document(base_id, document_id)
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.post("/knowledge-bases/{base_id}/documents/{document_id}/imports")
+def import_knowledge_document(
+    base_id: str,
+    document_id: str,
+    request: KnowledgeDocumentImportRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    try:
+        return db_manager.import_knowledge_document_sections(
+            base_id, document_id, request.section_ids, expected_version=request.expected_version
+        )
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
+
+
+@app.delete("/knowledge-bases/{base_id}/documents/{document_id}")
+def delete_knowledge_document(
+    base_id: str,
+    document_id: str,
+    expected_version: int = Query(..., ge=1),
+    delete_imported: bool = Query(False),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_feature_enabled("feature_knowledge_base_enabled")
+    try:
+        return db_manager.delete_knowledge_document(
+            base_id, document_id, expected_version=expected_version, delete_imported=delete_imported
+        )
+    except Exception as exc:
+        raise _knowledge_http_error(exc) from exc
 
 
 @app.post("/knowledge-bases/{base_id}/ask", response_model=KnowledgeBaseAskResponse)
@@ -6452,6 +6686,10 @@ async def ask_knowledge_base(
         "knowledge_base_name": knowledge_base["name"],
         "model_name": str(settings.get("model_name") or ""),
         "answer": answer,
+        "provided_evidence": _provided_evidence(
+            knowledge_base,
+            ai_reply_engine.knowledge_base_provided_entries(knowledge_base),
+        ),
     }
 
 
@@ -6488,7 +6726,19 @@ def preview_knowledge_binding(cookie_id: str, item_id: str, request: ProductKnow
         key = match.get("qa_key") or match.get("fact_key") or ""
         matches.append({"knowledge_key": key, "category": match.get("category", "product"), "score": int(match.get("score", 0))})
     fixed_rule = next((r for r in result["snapshot"].get("rules", []) if r.get("response") == result.get("fixed_reply")), None)
-    return {"policy_intent": fixed_rule.get("intent", "public") if fixed_rule else "public", "fixed_reply": result.get("fixed_reply"), "matches": matches, "match_count": len(matches), "used_characters": sum(len(m.get("answer") or m.get("content", "")) for m in result["matches"])}
+    evidence = []
+    matched_keys = {
+        (match.get("base_key"), match.get("qa_key") or match.get("fact_key"))
+        for match in result["matches"]
+    }
+    for binding in db_manager.list_item_knowledge_bindings(cookie_id, item_id):
+        base = db_manager.get_knowledge_base(binding["knowledge_base_id"])
+        selected = [
+            item for item in [*base.get("facts", []), *base.get("qa_entries", [])]
+            if (binding.get("base_key"), item.get("qa_key") or item.get("fact_key")) in matched_keys
+        ]
+        evidence.extend(_provided_evidence(base, selected))
+    return {"policy_intent": fixed_rule.get("intent", "public") if fixed_rule else "public", "fixed_reply": result.get("fixed_reply"), "matches": matches, "match_count": len(matches), "used_characters": sum(len(m.get("answer") or m.get("content", "")) for m in result["matches"]), "provided_evidence": evidence}
 
 
 @app.get("/ai-reply-style")

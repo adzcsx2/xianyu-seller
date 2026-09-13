@@ -482,32 +482,64 @@ class AIReplyEngine:
         return json.dumps(selected, ensure_ascii=False, separators=(",", ":"))
 
     @staticmethod
-    def _knowledge_base_qa_prompt(knowledge_base: dict) -> str:
-        """构建单个知识库的问答上下文，不上传来源备注或停用内容。"""
-        public_records = []
+    def knowledge_base_provided_entries(knowledge_base: dict) -> list:
+        """Return exactly the public rows that fit in the knowledge prompt budget."""
+        candidates = []
         facts = sorted(
             (item for item in knowledge_base.get("facts", []) if item.get("enabled")),
             key=lambda item: -int(item.get("priority", 0)),
         )
         for fact in facts:
-            public_records.append({
+            candidates.append((fact, {
                 "type": "fact",
                 "title": str(fact.get("title") or "")[:200],
                 "content": str(fact.get("content") or "")[:6000],
-            })
+            }))
         qa_entries = sorted(
             (item for item in knowledge_base.get("qa_entries", []) if item.get("enabled")),
             key=lambda item: -int(item.get("priority", 0)),
         )
         for entry in qa_entries:
-            public_records.append({
+            candidates.append((entry, {
                 "type": "qa",
                 "questions": [
                     str(question)[:300]
                     for question in list(entry.get("questions") or [])[:20]
                 ],
                 "answer": str(entry.get("answer") or "")[:5000],
-            })
+            }))
+        selected_entries = []
+        selected_records = []
+        for entry, record in candidates:
+            candidate = json.dumps(
+                [*selected_records, record], ensure_ascii=False, separators=(",", ":")
+            )
+            if len(candidate) > 12000:
+                break
+            selected_entries.append(entry)
+            selected_records.append(record)
+        return selected_entries
+
+    @staticmethod
+    def _knowledge_base_qa_prompt(knowledge_base: dict) -> str:
+        """构建单个知识库的问答上下文，不上传来源备注或停用内容。"""
+        public_records = []
+        for entry in AIReplyEngine.knowledge_base_provided_entries(knowledge_base):
+            if "content" in entry:
+                public_records.append({
+                    "type": "fact",
+                    "title": str(entry.get("title") or "")[:200],
+                    "content": str(entry.get("content") or "")[:6000],
+                })
+            else:
+                public_records.append({
+                    "type": "qa",
+                    "questions": [
+                        str(question)[:300]
+                        for question in list(entry.get("questions") or [])[:20]
+                    ],
+                    "answer": str(entry.get("answer") or "")[:5000],
+                })
         internal_rules = []
         rules = sorted(
             (item for item in knowledge_base.get("rules", []) if item.get("enabled")),
@@ -526,7 +558,7 @@ class AIReplyEngine:
                 "response": str(rule.get("response") or "")[:500],
                 "config": dict(rule.get("config_json") or {}),
             })
-        data = AIReplyEngine._limited_json_array(public_records, 12000)
+        data = json.dumps(public_records, ensure_ascii=False, separators=(",", ":"))
         policies = AIReplyEngine._limited_json_array(internal_rules, 6000)
         return f"""你是“{knowledge_base.get('name', '当前知识库')}”的知识库问答助手。
 仅依据 <knowledge_data> 和 <internal_rules> 两个区段提供的内容回答；找不到依据时明确回答“当前知识库中没有相关信息”，不得猜测。

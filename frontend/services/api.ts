@@ -13,7 +13,7 @@ import {
   AnnouncementPayload, ProductKnowledgeDocument, ProductKnowledgeEntry,
   KnowledgePreviewResult, KnowledgeBaseSummary, KnowledgeBaseDetail, KnowledgeFact,
   KnowledgeSource, KnowledgeRule, KnowledgeQAEntry, KnowledgeBinding, AIReplyStyle,
-  KnowledgeBaseAnswer, FeatureFlagPatch, FeatureFlagSnapshot, FeatureFlagsUpdateResponse,
+  KnowledgeBaseAnswer, KnowledgeDocument, FeatureFlagPatch, FeatureFlagSnapshot, FeatureFlagsUpdateResponse,
 } from '../types';
 
 // Auth
@@ -567,6 +567,20 @@ export const listKnowledgeBases = async (): Promise<KnowledgeBaseSummary[]> => {
 };
 export const createKnowledgeBase = async (name: string, description = ''): Promise<KnowledgeBaseSummary> => post('/knowledge-bases', { name, description });
 export const getKnowledgeBase = async (baseId: string): Promise<KnowledgeBaseDetail> => get(knowledgeBasePath(baseId));
+export const getKnowledgeDocument = async (baseId: string, documentId: string): Promise<KnowledgeDocument> => get(knowledgeBasePath(baseId, `/documents/${encodeURIComponent(documentId)}`));
+export const uploadKnowledgeDocument = async (baseId: string, expectedVersion: number, file: File): Promise<{ document: KnowledgeDocument; duplicate: boolean; version: number }> => {
+  const data = new FormData();
+  data.append('expected_version', String(expectedVersion));
+  data.append('file', file);
+  return post(knowledgeBasePath(baseId, '/documents'), data);
+};
+export const importKnowledgeDocumentSections = async (baseId: string, documentId: string, expectedVersion: number, sectionIds: string[]): Promise<{ document_id: string; imported_fact_ids: string[]; version: number }> => post(
+  knowledgeBasePath(baseId, `/documents/${encodeURIComponent(documentId)}/imports`),
+  { expected_version: expectedVersion, section_ids: sectionIds },
+);
+export const deleteKnowledgeDocument = async (baseId: string, documentId: string, expectedVersion: number, deleteImported = false): Promise<ApiResponse> => del(
+  `${knowledgeBasePath(baseId, `/documents/${encodeURIComponent(documentId)}`)}?expected_version=${expectedVersion}&delete_imported=${deleteImported}`,
+);
 export const updateKnowledgeBase = async (baseId: string, expectedVersion: number, data: Partial<Pick<KnowledgeBaseDetail, 'name' | 'description' | 'enabled'>>): Promise<KnowledgeBaseSummary> => put(knowledgeBasePath(baseId), { ...data, expected_version: expectedVersion });
 export const deleteKnowledgeBase = async (baseId: string, expectedVersion: number): Promise<ApiResponse & { binding_count?: number }> => del(`${knowledgeBasePath(baseId)}?expected_version=${expectedVersion}`);
 
