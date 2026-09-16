@@ -830,8 +830,10 @@ deploy/.wrangler/
 /logs/
 
 # Knowledge-base contents are private runtime/business data. Keep only code.
-/app/knowledge/*
+/app/knowledge/**
 !/app/knowledge/__init__.py
+/knowledge/
+/knowledge_base/
 
 # Logged-in account state and authentication artifacts
 # These paths may contain live cookies, tokens, browser profiles, QR codes,

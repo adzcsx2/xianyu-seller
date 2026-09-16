@@ -29,6 +29,10 @@ storage_state/
 auth_state/
 qrcodes/
 captcha/
+app/knowledge/**
+!app/knowledge/__init__.py
+knowledge/
+knowledge_base/
 .tmp/
 trajectory_history/
 user_data/
