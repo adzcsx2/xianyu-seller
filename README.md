@@ -51,6 +51,8 @@ python Start.py
 
 `Start.py` 会在启动前检查 `frontend` 源码和 `static/index.html` 的更新时间：源码更新时自动执行 `npm ci` 和 `npm run build`，未更新时跳过构建。Windows 下会自动解析 `npm.cmd`；如果构建失败，程序会停止启动，避免继续使用旧前端产物。服务启动后访问 <http://127.0.0.1:8080/>，按 `Ctrl+C` 停止。
 
+源码启动时会自动读取项目根目录的 `.env`，但 PowerShell、系统服务或容器已经注入的同名环境变量优先。源码监听端口使用 `API_PORT`；`.env.example` 中的 `WEB_PORT` 用于 Docker Compose 的宿主机端口映射。
+
 如需手动重新构建：
 
 ```powershell
@@ -143,15 +145,15 @@ docker compose -f docker-compose.nas.yml config --quiet
 
 当前仓库已通过以下措施阻止知识库内容进入 GitHub 或 Docker 构建上下文：
 
-- `.gitignore` 排除 `data/`、`app/knowledge/` 中的内容，以及数据库和运行状态文件。
-- `.dockerignore` 排除上述运行数据，即使执行 `COPY . .` 也不会把它们放入镜像构建上下文。
+- `.gitignore` 排除 `data/`、`app/knowledge/` 中的业务内容、数据库和运行状态文件，同时保留该目录内的 Python 实现代码。
+- `.dockerignore` 排除上述运行数据并保留实现代码，即使执行 `COPY . .` 也不会把私有内容放入镜像构建上下文。
 - GitHub Actions 只处理 Git 中已跟踪的源码来构建镜像，不会读取本机 `data/`、日志、浏览器状态或知识库运行数据；发布前还会检查禁止路径，发现被跟踪就直接失败。
 
 提交前可检查：
 
 ```bash
 git status --short
-git ls-files | grep -E '(^|/)(data|knowledge|knowledge_base|browser_data|logs)/|\.(db|sqlite|sqlite3)$'
+python scripts/check_private_runtime_data.py
 ```
 
 不要使用 `git add -f` 强行添加这些路径；如果某个私有文件曾经被跟踪过，仅添加 `.gitignore` 不会从历史中删除它，需要先备份，再执行针对该文件的 `git rm --cached` 并检查 Git 历史。
