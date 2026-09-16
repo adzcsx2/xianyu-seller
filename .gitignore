@@ -806,6 +806,7 @@ frontend/coverage/
 # Keep repository regression tests tracked
 !tests/
 !tests/test_*.py
+!scripts/check_private_runtime_data.py
 
 # Wrangler 本地缓存（Cloudflare Worker 部署产生）
 .wrangler/
@@ -831,7 +832,8 @@ deploy/.wrangler/
 
 # Knowledge-base contents are private runtime/business data. Keep only code.
 /app/knowledge/**
-!/app/knowledge/__init__.py
+!/app/knowledge/**/
+!/app/knowledge/**/*.py
 /knowledge/
 /knowledge_base/
 

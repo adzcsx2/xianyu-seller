@@ -34,15 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify private runtime data is not tracked
-        shell: bash
-        run: |
-          set -euo pipefail
-          forbidden="$(git ls-files | grep -E '(^|/)(data|knowledge|knowledge_base|browser_data|logs|backups|slider_cookies)(/|$)|\.(db|sqlite|sqlite3)$' | grep -v '^app/knowledge/__init__\.py$' || true)"
-          if [[ -n "$forbidden" ]]; then
-            echo 'Private runtime data must not be tracked or published:' >&2
-            echo "$forbidden" >&2
-            exit 1
-          fi
+        run: python scripts/check_private_runtime_data.py
 
       # 交叉编译 arm64 需要，飞牛等 NAS 有一部分是 ARM 机型
       - name: Set up QEMU
