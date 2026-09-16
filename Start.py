@@ -539,6 +539,7 @@ def _build_frontend():
     """自动安装依赖并构建前端"""
     frontend_dir = Path("frontend")
     static_dir = Path("static")
+    index_html = static_dir / "index.html"
 
     # 容器镜像在构建阶段就已经把前端产物放进 static/，运行时既没有 npm 也没有
     # node_modules。这里再走一遍只会白等一次 npm 失败，低配设备上还要多花几十秒，
@@ -548,7 +549,10 @@ def _build_frontend():
         return True
 
     if not frontend_dir.exists():
-        print(f"{_WARN} frontend 目录不存在，跳过前端构建")
+        if index_html.is_file():
+            print(f"{_INFO} frontend 源码目录不存在，使用已有前端构建产物")
+            return True
+        print(f"{_WARN} frontend 源码和 static/index.html 均不存在")
         return False
 
     build_dir = frontend_dir
@@ -556,8 +560,6 @@ def _build_frontend():
     print("检查前端构建状态...")
 
     need_build = False
-    index_html = static_dir / "index.html"
-
     if not index_html.exists():
         need_build = True
         print(f"{_INFO} static/index.html 不存在，需要构建前端")
@@ -626,7 +628,7 @@ def _build_frontend():
         build_env = os.environ.copy()
         build_env['PATH'] = os.pathsep.join((
             node_dir,
-            str(build_dir / 'node_modules' / '.bin'),
+            str((build_dir / 'node_modules' / '.bin').resolve()),
             str(system_root / 'System32'),
             str(system_root),
         ))
