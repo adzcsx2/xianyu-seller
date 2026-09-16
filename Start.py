@@ -10,6 +10,8 @@ import sys
 import shutil
 from pathlib import Path
 
+from utils.env_loader import load_env_file
+
 # 设置标准输出编码为UTF-8（Windows兼容）
 def _setup_console_encoding():
     """设置控制台编码为UTF-8，避免Windows GBK编码问题"""
@@ -58,6 +60,18 @@ _OK = '[OK]'
 _WARN = '[WARN]'
 _ERROR = '[ERROR]'
 _INFO = '[INFO]'
+
+# ``python Start.py`` 不会自动读取 .env。以启动脚本位置为基准加载，避免
+# 从其他工作目录启动时找不到项目根目录的环境文件；外部环境变量优先。
+_RUNTIME_ROOT = (
+    Path(sys.executable).resolve().parent
+    if getattr(sys, 'frozen', False)
+    else Path(__file__).resolve().parent
+)
+_ENV_FILE = _RUNTIME_ROOT / '.env'
+_loaded_env_count = load_env_file(_ENV_FILE)
+if _ENV_FILE.is_file():
+    print(f"{_INFO} 已加载环境配置: {_ENV_FILE} ({_loaded_env_count} 项)")
 
 # ==================== 在导入任何模块之前先迁移数据库 ====================
 def _migrate_database_files_early():
@@ -586,7 +600,38 @@ def _build_frontend():
         if sys.platform == 'win32' and hasattr(subprocess, 'CREATE_NO_WINDOW'):
             creation_flags = subprocess.CREATE_NO_WINDOW
 
-        install_command = ['npm', 'ci'] if (build_dir / 'package-lock.json').exists() else ['npm', 'install']
+        # Windows 下 npm 通常由 npm.cmd 提供；直接执行 npm 可能被
+        # subprocess.CreateProcess 判定为找不到文件，即使 PowerShell 中
+        # 可以通过 npm.ps1 正常调用。因此先解析可直接执行的入口。
+        npm_executable = shutil.which('npm.cmd') or shutil.which('npm')
+        if not npm_executable:
+            print(f"{_WARN} 未找到可执行的 npm，请确保已安装 Node.js 和 npm")
+            print(f"   你可以手动运行: cd {build_dir} && npm install && npm run build")
+            return False
+
+        node_executable = shutil.which('node.exe') or shutil.which('node')
+        if not node_executable:
+            npm_node = Path(npm_executable).with_name('node.exe')
+            if npm_node.is_file():
+                node_executable = str(npm_node)
+        if not node_executable:
+            print(f"{_WARN} 未找到可执行的 Node.js，请确保已安装 Node.js")
+            return False
+
+        # Codex/开发环境的 PATH 可能超过 cmd.exe 的可靠解析长度，导致
+        # npm.cmd 能启动但 npm run 内部找不到 node。给构建子进程传入精简
+        # 且包含 Node、项目本地 bin 和 Windows 系统目录的 PATH。
+        node_dir = str(Path(node_executable).resolve().parent)
+        system_root = Path(os.environ.get('SystemRoot', r'C:\Windows'))
+        build_env = os.environ.copy()
+        build_env['PATH'] = os.pathsep.join((
+            node_dir,
+            str(build_dir / 'node_modules' / '.bin'),
+            str(system_root / 'System32'),
+            str(system_root),
+        ))
+
+        install_command = [npm_executable, 'ci'] if (build_dir / 'package-lock.json').exists() else [npm_executable, 'install']
         install_label = ' '.join(install_command)
 
         try:
@@ -596,7 +641,8 @@ def _build_frontend():
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5分钟超时
-                creationflags=creation_flags
+                creationflags=creation_flags,
+                env=build_env,
             )
 
             if result.returncode == 0:
@@ -612,7 +658,7 @@ def _build_frontend():
             print(f"{_WARN} {install_label} 超时（超过5分钟）")
             return False
         except FileNotFoundError:
-            print(f"{_WARN} 未找到 npm，请确保已安装 Node.js 和 npm")
+            print(f"{_WARN} 未找到可执行的 npm，请确保已安装 Node.js 和 npm")
             print(f"   你可以手动运行: cd {build_dir} && npm install && npm run build")
             return False
         except Exception as e:
@@ -623,12 +669,13 @@ def _build_frontend():
         print(f"   2. 构建前端...")
         try:
             result = subprocess.run(
-                ['npm', 'run', 'build'],
+                [npm_executable, 'run', 'build'],
                 cwd=str(build_dir),
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5分钟超时
-                creationflags=creation_flags
+                creationflags=creation_flags,
+                env=build_env,
             )
 
             if result.returncode == 0:
@@ -657,10 +704,11 @@ def _build_frontend():
 try:
     build_success = _build_frontend()
     if not build_success:
-        print(f"{_WARN} 前端构建失败，程序将继续启动但前端可能不可用")
+        print(f"{_ERROR} 前端构建失败，已停止启动，避免使用过期的前端构建产物")
+        raise SystemExit(1)
 except Exception as e:
-    print(f"{_WARN} 前端构建检查失败: {e}")
-    print("   程序将继续启动，但前端可能不可用")
+    print(f"{_ERROR} 前端构建检查失败，已停止启动: {e}")
+    raise SystemExit(1) from e
 
 # ==================== 现在可以安全地导入其他模块 ====================
 import asyncio
