@@ -27,7 +27,13 @@ import {
   updateSystemSettings,
 } from '../services/api';
 import { notify } from '../services/feedback';
-import { FeatureFlagDefinition, FeatureKey, QuickPhrase, SystemSettings } from '../types';
+import {
+  FeatureFlagDefinition,
+  FeatureFlagPatch,
+  FeatureKey,
+  QuickPhrase,
+  SystemSettings,
+} from '../types';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import {
   NoticeBanner,
@@ -238,20 +244,37 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleSaveFeatures = async () => {
-    if (!featureSnapshot || !featureDraft || !isAdmin) return;
-    const changedFlags = Object.fromEntries(
-      Object.entries(featureDraft).filter(([key, value]) => (
-        value !== featureSnapshot.configured[key as FeatureKey]
-      )),
-    ) as Partial<Record<FeatureKey, boolean>>;
-    if (Object.keys(changedFlags).length === 0) {
-      notify('功能开关没有变化');
-      return;
+  const handleToggleFeature = async (definition: FeatureFlagDefinition) => {
+    if (!featureSnapshot || !featureDraft || !isAdmin || featureUpdating) return;
+
+    const checked = featureDraft[definition.key] === true;
+    const patch: FeatureFlagPatch = { [definition.key]: !checked };
+
+    // 开启子功能时自动开启依赖，避免 configured 已开启但 effective 仍为 false，
+    // 进而导致对应页面和左侧导航继续隐藏。
+    if (!checked) {
+      const pending = [...definition.depends_on];
+      const visited = new Set<FeatureKey>();
+      while (pending.length > 0) {
+        const dependency = pending.pop();
+        if (!dependency || visited.has(dependency)) continue;
+        visited.add(dependency);
+        if (featureSnapshot.configured[dependency] !== true) patch[dependency] = true;
+        const dependencyDefinition = featureSnapshot.definitions.find(
+          item => item.key === dependency,
+        );
+        if (dependencyDefinition) pending.push(...dependencyDefinition.depends_on);
+      }
     }
+
+    setFeatureDraft(current => ({
+      ...(current || featureSnapshot.configured),
+      ...patch,
+    }));
+
     try {
-      await updateFeatureFlagsState(changedFlags);
-      notify('功能开关已保存');
+      await updateFeatureFlagsState(patch);
+      notify('功能开关已自动保存');
     } catch (error) {
       // Context 保留旧 snapshot；draft 也保留，方便用户修正后重试。
       notify(`功能开关保存失败：${(error as Error).message}`);
@@ -283,15 +306,10 @@ const Settings: React.FC = () => {
               刷新
             </button>
             {activeSection === 'features' ? (
-              <button
-                type="button"
-                onClick={() => void handleSaveFeatures()}
-                disabled={!isAdmin || featureUpdating || !featureDraft}
-                className="ios-btn-primary flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm disabled:opacity-60"
-              >
+              <span className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-[var(--text-soft)]">
                 <Save className="h-4 w-4" />
-                {featureUpdating ? '保存中' : '保存功能开关'}
-              </button>
+                {featureUpdating ? '保存中' : '功能开关自动保存'}
+              </span>
             ) : (
               <button
                 type="button"
@@ -366,10 +384,7 @@ const Settings: React.FC = () => {
                           title={definition.label}
                           description={definition.description}
                           checked={checked}
-                          onChange={() => setFeatureDraft(current => ({
-                            ...(current || featureSnapshot.configured),
-                            [definition.key]: !checked,
-                          }))}
+                          onChange={() => void handleToggleFeature(definition)}
                           disabled={!isAdmin || featureUpdating}
                         />
                         <div className="border-b border-gray-100 px-4 pb-3 text-xs text-gray-500 last:border-b-0">

@@ -67,8 +67,8 @@ class FeatureFrontendContractTests(unittest.TestCase):
             "useFeatureFlags",
             "SettingsSection =",
             "features",
-            "handleSaveFeatures",
-            "updateFeatureFlagsState(changedFlags)",
+            "handleToggleFeature",
+            "await updateFeatureFlagsState(patch)",
             "configured",
             "effective",
             "depends_on",
@@ -77,6 +77,17 @@ class FeatureFrontendContractTests(unittest.TestCase):
             "disabled={!isAdmin",
         ):
             self.assertIn(marker, source)
+
+    def test_feature_toggles_persist_immediately_and_enable_dependencies(self):
+        source = (FRONTEND / "components" / "Settings.tsx").read_text(encoding="utf-8")
+        for marker in (
+            "handleToggleFeature",
+            "await updateFeatureFlagsState(patch)",
+            "definition.depends_on",
+            "功能开关自动保存",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("updateFeatureFlagsState(changedFlags)", source)
 
     def test_app_provides_one_feature_snapshot_context_after_auth(self):
         source = (FRONTEND / "App.tsx").read_text(encoding="utf-8")
