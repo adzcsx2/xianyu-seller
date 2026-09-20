@@ -120,6 +120,8 @@ class PasswordLoginLifecycleTests(unittest.IsolatedAsyncioTestCase):
         loop_thread = threading.get_ident()
         for outcome in (None, RuntimeError('browser failed'), {'unb': 'test-login'}):
             with self.subTest(outcome=type(outcome).__name__):
+                XianyuLive._last_password_login_time.pop('test-login', None)
+
                 def create(**kwargs):
                     self.thread_ids.append(threading.get_ident())
                     instance = real_class(**kwargs)

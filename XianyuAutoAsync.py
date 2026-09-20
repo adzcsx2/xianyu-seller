@@ -2991,6 +2991,7 @@ class XianyuLive:
         log_captcha_event(self.cookie_id, f"{trigger_reason}触发Cookie刷新和实例重启", None,
             f"检测到{trigger_reason}，准备刷新Cookie并重启实例")
 
+        password_login_attempted = False
         try:
             # 从数据库获取账号登录信息
             from app.db_manager import db_manager
@@ -3060,6 +3061,10 @@ class XianyuLive:
                     # 并发管理器持有实例引用，不能依赖析构函数释放槽位。
                     slider.close_browser()
 
+            # 从浏览器真正开始尝试起计入冷却。失败也必须记录，否则主连接的
+            # 5/10/15 秒退避会不断重开登录页，既放大平台风控，也可能复用尚未
+            # 完全退出的 Playwright 线程运行时。
+            password_login_attempted = True
             result = await asyncio.to_thread(run_password_login)
             
             if result:
@@ -3087,10 +3092,6 @@ class XianyuLive:
                     f"字段数={len(result)}, 字符串长度={len(new_cookies_str)}"
                 )
                 
-                # 记录密码登录时间，防止重复登录
-                XianyuLive._last_password_login_time[self.cookie_id] = time.time()
-                logger.warning(f"【{self.cookie_id}】已记录密码登录时间，冷却期 {XianyuLive._password_login_cooldown} 秒")
-                
                 # 更新cookies并重启任务
                 update_success = await self._update_cookies_and_restart(new_cookies_str)
                 
@@ -3115,6 +3116,13 @@ class XianyuLive:
             import traceback
             logger.error(f"【{self.cookie_id}】详细堆栈:\n{traceback.format_exc()}")
             return False
+        finally:
+            if password_login_attempted:
+                XianyuLive._last_password_login_time[self.cookie_id] = time.time()
+                logger.warning(
+                    f"【{self.cookie_id}】已记录密码登录尝试结束时间，"
+                    f"冷却期 {XianyuLive._password_login_cooldown} 秒"
+                )
 
     async def _verify_cookie_validity(self) -> dict:
         """验证Cookie的有效性，通过实际调用API测试
