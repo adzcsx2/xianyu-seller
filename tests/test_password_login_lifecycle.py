@@ -147,6 +147,41 @@ class PasswordLoginLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 finally:
                     self.instances[-1].close_browser()
 
+    async def test_auto_refresh_failure_starts_cooldown_before_next_reconnect(self):
+        created_instances = []
+
+        class FailedSlider:
+            def __init__(self, **_kwargs):
+                created_instances.append(self)
+
+            def login_with_password_playwright(self, **_kwargs):
+                return None
+
+            def close_browser(self):
+                return None
+
+        live = self.make_live()
+        with (
+            patch(
+                'utils.slider_runtime.load_slider_class',
+                return_value=(FailedSlider, 'slidex-test'),
+            ),
+            patch.object(reply_server.db_manager, 'get_cookie_details', return_value={
+                'username': 'test-user', 'password': 'test-password',
+            }),
+            patch('XianyuAutoAsync.log_captcha_event'),
+        ):
+            first_result = await live._try_password_login_refresh()
+            second_result = await live._try_password_login_refresh()
+
+        self.assertFalse(first_result)
+        self.assertFalse(second_result)
+        self.assertEqual(
+            len(created_instances),
+            1,
+            '失败的密码登录没有进入冷却，重连循环会持续触发浏览器风控',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
