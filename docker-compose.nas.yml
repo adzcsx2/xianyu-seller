@@ -26,6 +26,8 @@ services:
       - ./data:/app/data:rw
       - ./logs:/app/logs:rw
       - ./backups:/app/backups:rw
+      # Persist the slidex browser/device profile across container recreation.
+      - ./browser_data/slidex:/root/.slidex:rw
     environment:
       TZ: Asia/Shanghai
       DB_PATH: /app/data/xianyu_data.db

@@ -13,6 +13,8 @@ services:
       - ./data:/app/data:rw
       - ./logs:/app/logs:rw
       - ./backups:/app/backups:rw
+      # Persist the slidex browser/device profile across container recreation.
+      - ./browser_data/slidex:/root/.slidex:rw
       - ./global_config.yml:/app/global_config.yml:ro
     environment:
       PYTHONUNBUFFERED: "${PYTHONUNBUFFERED:-1}"
